@@ -11,6 +11,11 @@ const TICK_MS = 100;            // 위치 방송 주기 (초당 10번)
 const MAX_MOVES_PER_SEC = 30;
 const CHAT_MAX = 5, CHAT_WINDOW_MS = 5000, CHAT_LEN = 120;
 const ACT_MAX = 8, ACT_WINDOW_MS = 10000;      // 엘리베이터, 층 등록 같은 요청 횟수 제한
+// 직급 (낮은 순). 총관리자(owner)는 DB 직급과 별개로 환경 변수의 아이디로 정해지며 모든 직급 위에 있다.
+const RANK_ORDER = ['intern', 'staff', 'deputy', 'lead', 'manager', 'ceo'];
+const RANK_KO = { intern: '인턴', staff: '사원', deputy: '부팀장', lead: '팀장', manager: '부장', ceo: '사장', owner: '총관리자' };
+const level = rank => rank === 'owner' ? RANK_ORDER.length : RANK_ORDER.indexOf(rank);
+const rankOf = user => config.superAdmin && user.username === config.superAdmin ? 'owner' : user.rank;
 const RE_FLOOR_NAME = /^[가-힣a-zA-Z0-9 ]{0,12}$/;
 
 class Game {
@@ -86,7 +91,7 @@ class Game {
     }
     const p = {
       id: user.id, name: user.nickname, ws,
-      rank: config.superAdmin && user.username === config.superAdmin ? 'owner' : user.rank,
+      rank: rankOf(user),
       area: 'out', x: World.SPAWN.start.x + (Math.random() * 4 - 2), z: World.SPAWN.start.z + Math.random() * 2,
       f: Math.PI, dirty: false, lastMove: Date.now(), moveSec: 0, moveCount: 0, chatTimes: [],
       umb: false, lastUmb: 0, floor: user.floor || null, actTimes: [], busy: false, unlocked12: false
@@ -116,12 +121,13 @@ class Game {
     else if (m.t === 'chat') this.onChat(p, m);
     else if (m.t === 'area') this.onArea(p, m);
     else if (m.t === 'umb') this.onUmbrella(p, m);
-    else if (m.t === 'elev' || m.t === 'freg' || m.t === 'fname' || m.t === 'fpass') {
+    else if (m.t === 'elev' || m.t === 'freg' || m.t === 'fname' || m.t === 'fpass' || m.t === 'who' || m.t === 'roster' || m.t === 'setrank') {
       // DB를 쓰는 요청은 한 사람당 한 번에 하나씩만 처리한다
       if (p.busy || !this.actOk(p)) return;
       p.busy = true;
       const run = m.t === 'elev' ? this.onElev(p, m) : m.t === 'freg' ? this.onFloorReg(p, m)
-        : m.t === 'fname' ? this.onFloorName(p, m) : this.onFloorPass(p, m);
+        : m.t === 'fname' ? this.onFloorName(p, m) : m.t === 'fpass' ? this.onFloorPass(p, m)
+        : m.t === 'who' ? this.onWho(p, m) : m.t === 'roster' ? this.onRoster(p) : this.onSetRank(p, m);
       run.catch(e => { console.error(e); if (this.alive(p)) this.toast(p, '요청을 처리하지 못했습니다.'); })
         .then(() => { p.busy = false; });
     }
@@ -202,6 +208,60 @@ class Game {
       if (!World.nearElev(p.area, p.x, p.z, 0.8)) return;      // 확인하는 사이 자리를 떴으면 태우지 않는다
     }
     this.moveTo(p, World.areaOf(to), World.ELEV_OUT.x + (Math.random() - 0.5), World.ELEV_OUT.z, 0);
+  }
+
+  // 프로필 카드에 보여 줄 정보
+  card(u) { return { t: 'who', id: u.id, n: u.nickname, r: rankOf(u), floor: u.floor || null, on: this.players.has(u.id) ? 1 : 0 }; }
+  async onWho(p, m) {
+    const id = Number(m.id);
+    if (!Number.isInteger(id) || id < 1) return;
+    const u = await db.findById(id);
+    if (u && !u.banned && this.alive(p)) this.send(p.ws, this.card(u));
+  }
+  async onRoster(p) {
+    const list = (await db.listUsers()).map(u => [u.id, u.nickname, rankOf(u), u.floor || 0, this.players.has(u.id) ? 1 : 0]);
+    if (this.alive(p)) this.send(p.ws, { t: 'roster', list });
+  }
+
+  // 승진·강등. 팀장 이상이, 자기보다 낮은 사람을, 자기보다 낮은 직급까지만 바꿀 수 있다.
+  // 사장 임명은 총관리자만 할 수 있고(사장보다 높은 직급이 총관리자뿐이므로), 사장은 한 명만 둔다.
+  async onSetRank(p, m) {
+    const id = Number(m.id), to = m.r;
+    if (!Number.isInteger(id) || id < 1 || !RANK_ORDER.includes(to)) return;
+    const a = level(p.rank);
+    if (a < level('lead')) return this.toast(p, '팀장 이상만 직급을 바꿀 수 있습니다.');
+    if (id === p.id) return this.toast(p, '자기 자신의 직급은 바꿀 수 없습니다.');
+    const u = await db.findById(id);
+    if (!this.alive(p)) return;
+    if (!u || u.banned) return this.toast(p, '찾을 수 없는 사원입니다.');
+    const cur = rankOf(u);
+    if (cur === 'owner') return this.toast(p, '총관리자의 직급은 바꿀 수 없습니다.');
+    if (level(cur) >= a) return this.toast(p, '자신보다 낮은 직급의 사원만 바꿀 수 있습니다.');
+    if (level(to) >= a) return this.toast(p, '자신보다 낮은 직급까지만 줄 수 있습니다.');
+    if (to === cur) return;
+    if (!(await db.setRank(id, u.rank, to))) return this.alive(p) && this.toast(p, '방금 다른 사람이 직급을 바꿨습니다. 다시 확인해 주세요.');
+    await db.audit(p.id, 'rank', u.nickname + '(' + id + ') ' + cur + ' -> ' + to);
+    const up = level(to) > level(cur);
+    this.applyRank(id, to, RANK_KO[to] + '(으)로 ' + (up ? '승진했습니다.' : '직급이 바뀌었습니다.'));
+    if (to === 'ceo') {
+      for (const old of await db.demoteOtherCeos(id)) {
+        await db.audit(p.id, 'rank', '사장 교체로 ' + old + ' ceo -> manager');
+        this.applyRank(old, 'manager', '새 사장이 임명되어 부장이 되었습니다.');
+      }
+    }
+    if (this.alive(p)) {
+      this.toast(p, u.nickname + ' 님을 ' + RANK_KO[to] + '(으)로 ' + (up ? '승진' : '변경') + '했습니다.');
+      u.rank = to;
+      this.send(p.ws, this.card(u));
+    }
+  }
+  // 접속 중이면 이름표가 모든 사람 화면에서 바로 바뀐다
+  applyRank(uid, rank, note) {
+    const q = this.players.get(uid);
+    if (!q) return;
+    q.rank = rank;
+    this.broadcast(q.area, { t: 'rank', id: uid, r: rank });
+    this.toast(q, note);
   }
 
   // 층 등록/해제. 한 사람은 한 층에만, 한 층에는 20명까지.

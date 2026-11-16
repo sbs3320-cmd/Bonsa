@@ -17,6 +17,7 @@ function bonsaBoot() {
     '꾸미기: 등록한 층에서는 가구와 소품을 놓고, 옮기고, 돌리고, 지울 수 있습니다.',
     '게시판: 로비 전체 게시판은 누구나 읽고, 층 게시판은 그 층에 등록한 사원이 글을 씁니다.',
     '직급: 인턴으로 시작해 사원, 부팀장, 팀장, 부장, 사장 순으로 올라갑니다. 팀장 이상이 아래 직급을 승진시킵니다.',
+    '프로필: 캐릭터를 누르면 프로필이 열립니다. 화면 위 접속 인원을 누르면 사원 명부를 볼 수 있어요.',
     '이벤트: 사장이나 부장이 이벤트를 열면 참여해서 보상금을 받습니다. 돈으로 가구와 치장 아이템을 살 수 있어요.',
     '12층 사장실은 비밀번호가 걸려 있을 수 있습니다. 그럼 즐거운 회사 생활 되세요!'
   ];
@@ -662,7 +663,7 @@ function bonsaBoot() {
     var g = makeCharacter(BODY_COLORS[p.id % BODY_COLORS.length], tagOf(p.r, p.n), p.id);
     g.position.set(p.x, 0, p.z); g.rotation.y = p.f;
     scene.add(g);
-    others[p.id] = { g: g, x: p.x, z: p.z, f: p.f, walk: 0, umb: !!p.u };
+    others[p.id] = { g: g, x: p.x, z: p.z, f: p.f, walk: 0, umb: !!p.u, n: p.n, r: p.r };
   }
   function removeOther(id) {
     var o = others[id];
@@ -693,7 +694,7 @@ function bonsaBoot() {
     lockUntil = performance.now() + 700;
     $('fade').classList.add('on');
     setTimeout(function () {
-      closeElev(); closeFinfo();
+      closeElev(); closeFinfo(); closeRoster(); closeProf();
       applyArea(next, x, z);
       P.face = typeof face === 'number' ? face : (next === 'in' ? Math.PI : 0);
       cam.yaw = next === 'out' ? Math.PI : 0; cam.pitch = next === 'out' ? 0.42 : 0.36;
@@ -821,6 +822,102 @@ function bonsaBoot() {
   $('fiPassOff').addEventListener('click', function () { sendMsg({ t: 'fpass', pw: '' }); });
   $('fiClose').addEventListener('click', closeFinfo);
   $('finfo').addEventListener('click', function (e) { if (e.target === $('finfo')) closeFinfo(); });
+
+  /* ---------- 프로필 카드, 사원 명부, 승진·강등 (단추가 보여도 판정은 서버가 다시 한다) ---------- */
+  var RANK_ORDER = ['intern', 'staff', 'deputy', 'lead', 'manager', 'ceo'];
+  function level(r) { return r === 'owner' ? RANK_ORDER.length : RANK_ORDER.indexOf(r); }
+  var prof = null, rosterList = null;
+  function clear(el) { while (el.firstChild) el.removeChild(el.firstChild); }
+  function renderProf() {
+    if (!prof) return;
+    $('pfName').textContent = tagOf(prof.r, prof.n);
+    $('pfNote').textContent = '직급: ' + (RANKS[prof.r] || prof.r) + ' · 등록 층: ' + (prof.floor ? floorLabel(prof.floor) : '없음') + ' · ' + (prof.on ? '접속 중' : '접속 안 함');
+    var box0 = $('pfRanks'), a = level(me.r), t = level(prof.r), any = false;
+    clear(box0);
+    if (a >= level('lead') && prof.id !== myId && prof.r !== 'owner' && t < a) {
+      for (var i = Math.min(a, RANK_ORDER.length) - 1; i >= 0; i--) {
+        if (i === t) continue;
+        var b = document.createElement('button'), sp = document.createElement('span');
+        b.type = 'button'; b.setAttribute('data-rank', RANK_ORDER[i]);
+        b.appendChild(document.createTextNode(RANKS[RANK_ORDER[i]]));
+        sp.textContent = i > t ? '승진' : '강등'; b.appendChild(sp);
+        box0.appendChild(b); any = true;
+      }
+    }
+    $('pfRankSec').style.display = any ? 'block' : 'none';
+  }
+  function showProf(m) {
+    if (!m || typeof m.n !== 'string' || !RANKS[m.r]) return;
+    prof = { id: m.id, n: m.n, r: m.r, floor: m.floor || null, on: !!m.on };
+    if (rosterList) rosterList.forEach(function (u) { if (u[0] === prof.id) u[2] = prof.r; });
+    if ($('roster').style.display === 'flex') drawRoster();
+    renderProf();
+    if ($('prof').style.display !== 'flex') { $('prof').style.display = 'flex'; uiOpen = true; }
+  }
+  function closeProf() { if ($('prof').style.display !== 'flex') return; $('prof').style.display = 'none'; prof = null; uiOpen = $('roster').style.display === 'flex'; }
+  $('pfRanks').addEventListener('click', function (e) {
+    var b = e.target.closest ? e.target.closest('button') : null;
+    if (b && prof) sendMsg({ t: 'setrank', id: prof.id, r: b.getAttribute('data-rank') });
+  });
+  $('pfClose').addEventListener('click', closeProf);
+  $('prof').addEventListener('click', function (e) { if (e.target === $('prof')) closeProf(); });
+
+  function drawRoster() {
+    var box0 = $('rsList'); clear(box0);
+    if (!rosterList) return;
+    var on = 0;
+    rosterList.forEach(function (u) {
+      var b = document.createElement('button'), sp = document.createElement('span');
+      b.type = 'button'; b.setAttribute('data-id', u[0]);
+      b.appendChild(document.createTextNode(tagOf(u[2], u[1])));
+      sp.textContent = (u[3] ? u[3] + '층' : '미등록') + (u[4] ? ' · 접속 중' : '');
+      if (u[4]) on++;
+      b.appendChild(sp); box0.appendChild(b);
+    });
+    $('rsNote').textContent = '전체 ' + rosterList.length + '명 · 접속 ' + on + '명. 이름을 누르면 프로필이 열립니다.';
+  }
+  function renderRoster(list) {
+    if (!Array.isArray(list)) return;
+    rosterList = list.filter(function (u) { return Array.isArray(u) && typeof u[1] === 'string' && RANKS[u[2]]; })
+      .sort(function (x, y) { return level(y[2]) - level(x[2]) || x[0] - y[0]; });
+    drawRoster();
+  }
+  function openRoster() {
+    if (!playing || uiOpen) return;
+    uiOpen = true; rosterList = null; clear($('rsList')); $('rsNote').textContent = '불러오는 중…';
+    $('roster').style.display = 'flex';
+    sendMsg({ t: 'roster' });
+  }
+  function closeRoster() { if ($('roster').style.display !== 'flex') return; $('roster').style.display = 'none'; closeProf(); uiOpen = false; }
+  $('count').addEventListener('click', openRoster);
+  $('rsList').addEventListener('click', function (e) {
+    var b = e.target.closest ? e.target.closest('button') : null;
+    if (b) sendMsg({ t: 'who', id: Number(b.getAttribute('data-id')) });
+  });
+  $('rsClose').addEventListener('click', closeRoster);
+  $('roster').addEventListener('click', function (e) { if (e.target === $('roster')) closeRoster(); });
+
+  // 캐릭터를 짧게 누르면 그 사람의 프로필을 연다 (화면에 찍힌 위치로 가장 가까운 사람을 고른다)
+  var pickV = new THREE.Vector3();
+  function pick(px, py) {
+    if (!playing || uiOpen || chatOpen) return;
+    var best = 70 * 70, hit = null, w = window.innerWidth, h = window.innerHeight;
+    function test(id, g) {
+      pickV.set(g.position.x, 1.0, g.position.z).project(camera);
+      if (!(pickV.z < 1)) return;
+      var dx = (pickV.x * 0.5 + 0.5) * w - px, dy = (-pickV.y * 0.5 + 0.5) * h - py, d = dx * dx + dy * dy;
+      if (d < best) { best = d; hit = id; }
+    }
+    for (var id in others) test(Number(id), others[id].g);
+    test(myId, player);
+    if (hit) sendMsg({ t: 'who', id: hit });
+  }
+  var tap = {};
+  function tapStart(e) { tap[e.pointerId] = { x: e.clientX, y: e.clientY, t: performance.now() }; }
+  function tapEnd(e) {
+    var s0 = tap[e.pointerId]; delete tap[e.pointerId];
+    if (s0 && performance.now() - s0.t < 350 && Math.abs(e.clientX - s0.x) < 10 && Math.abs(e.clientY - s0.y) < 10) pick(e.clientX, e.clientY);
+  }
   var current = null;
   function doAction() { if (current && !uiOpen) current.run(); }
   $('act').addEventListener('click', doAction);
@@ -983,7 +1080,7 @@ function bonsaBoot() {
         myId = m.id; retry = 0;
         player.children.forEach(function (c) { if (c.material === mat(BODY_COLORS[0])) c.material = mat(BODY_COLORS[myId % BODY_COLORS.length]); });
         setTag(player, tagOf(m.me.r, m.me.n));
-        me.r = m.me.r; me.floor = m.me.floor || null;
+        me.r = m.me.r; me.n = m.me.n; me.floor = m.me.floor || null;
         if (m.floors) setFloors(m.floors);
         player.userData.umb.children[0].material = umbMats[myId % umbMats.length];
         if (typeof m.now === 'number') clockOffset = m.now - Date.now();
@@ -1019,6 +1116,15 @@ function bonsaBoot() {
       case 'me': me.floor = m.floor || null; if ($('finfo').style.display === 'flex') renderFinfo(); if ($('elev').style.display === 'flex') renderElev(); break;
       case 'needpw': $('pwRow').style.display = 'block'; $('pwIn').value = ''; $('pwIn').focus(); break;
       case 'toast': toast(m.m); break;
+      case 'rank':
+        if (!RANKS[m.r]) break;
+        if (m.id === myId) { me.r = m.r; setTag(player, tagOf(me.r, me.n)); }
+        else if (others[m.id]) { others[m.id].r = m.r; setTag(others[m.id].g, tagOf(m.r, others[m.id].n)); }
+        if ($('finfo').style.display === 'flex') renderFinfo();
+        if ($('prof').style.display === 'flex') renderProf();
+        break;
+      case 'who': showProf(m); break;
+      case 'roster': renderRoster(m.list); break;
       case 'sys': logLine(m.m, true); break;
       case 'online': $('count').textContent = '접속 ' + m.n + '명'; break;
       case 'kick': stopped = true; setOthers([]); showAuth(m.m); break;
@@ -1241,6 +1347,7 @@ function bonsaBoot() {
   var look = { id: null, x: 0, y: 0 };
   canvas.addEventListener('pointerdown', function (e) {
     if (chatOpen) { closeChat(); return; }
+    tapStart(e);
     if (e.pointerType === 'touch' && joy.id === null && playing && !uiOpen && e.clientX < window.innerWidth * 0.5) {
       joy.id = e.pointerId;
       stick.style.left = (e.clientX - 64) + 'px'; stick.style.top = (e.clientY - 64) + 'px'; stick.style.bottom = 'auto';
@@ -1261,7 +1368,7 @@ function bonsaBoot() {
     cam.pitch = Math.max(0.12, Math.min(1.05, cam.pitch));
     look.x = e.clientX; look.y = e.clientY;
   });
-  function lookEnd(e) { if (floatEnd(e)) return; if (e.pointerId === look.id) look.id = null; }
+  function lookEnd(e) { if (e.type === 'pointerup') tapEnd(e); else delete tap[e.pointerId]; if (floatEnd(e)) return; if (e.pointerId === look.id) look.id = null; }
   canvas.addEventListener('pointerup', lookEnd);
   canvas.addEventListener('pointercancel', lookEnd);
   document.addEventListener('contextmenu', function (e) { e.preventDefault(); });

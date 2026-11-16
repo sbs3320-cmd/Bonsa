@@ -35,6 +35,21 @@ function pgStore() {
       const r = await pool.query('SELECT * FROM users WHERE id = $1', [id]);
       return r.rows[0] || null;
     },
+    // 사원 명부 (비밀번호 해시는 꺼내지 않는다)
+    async listUsers() {
+      const r = await pool.query('SELECT id, username, nickname, rank, floor FROM users WHERE banned = FALSE ORDER BY id LIMIT 300');
+      return r.rows;
+    },
+    // 직급 변경. 그 사이 다른 사람이 먼저 바꿨으면(from 이 다르면) 실패한다.
+    async setRank(uid, from, to) {
+      const r = await pool.query('UPDATE users SET rank = $3 WHERE id = $1 AND rank = $2', [uid, from, to]);
+      return r.rowCount === 1;
+    },
+    // 사장은 한 명뿐: 새 사장을 뺀 기존 사장을 부장으로 내린다
+    async demoteOtherCeos(uid) {
+      const r = await pool.query("UPDATE users SET rank = 'manager' WHERE rank = 'ceo' AND id <> $1 RETURNING id", [uid]);
+      return r.rows.map(x => x.id);
+    },
     // 층 정보: 이름, 12층 비밀번호 해시, 층별 등록 인원
     async loadFloors() {
       const f = await pool.query('SELECT floor, name, pass_hash FROM floors');
@@ -92,6 +107,9 @@ function memoryStore() {
     },
     async findByUsername(username) { return users.find(u => u.username === username) || null; },
     async findById(id) { return users.find(u => u.id === id) || null; },
+    async listUsers() { return users.filter(u => !u.banned).map(u => ({ id: u.id, username: u.username, nickname: u.nickname, rank: u.rank, floor: u.floor })); },
+    async setRank(uid, from, to) { const u = users.find(x => x.id === uid); if (!u || u.rank !== from) return false; u.rank = to; return true; },
+    async demoteOtherCeos(uid) { const ids = []; users.forEach(u => { if (u.rank === 'ceo' && u.id !== uid) { u.rank = 'manager'; ids.push(u.id); } }); return ids; },
     async loadFloors() {
       const counts = {};
       users.forEach(u => { if (u.floor) counts[u.floor] = (counts[u.floor] || 0) + 1; });

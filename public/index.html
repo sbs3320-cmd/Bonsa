@@ -36,7 +36,7 @@
   }
   /* 터치 기기: 조이스틱은 평소에 숨어 있다가 누른 자리에 나타난다 */
   .touch #stick { display: none; pointer-events: none; }
-  #bgmBtn { pointer-events: auto; border: 0; font-family: inherit; min-height: 32px; }
+  #bgmBtn, #count { pointer-events: auto; border: 0; font-family: inherit; min-height: 32px; }
   #act {
     position: fixed; right: 22px; bottom: 44px; min-width: 96px; min-height: 64px;
     padding: 0 20px; border: 0; border-radius: 32px; background: #2f6fed; color: #fff;
@@ -94,6 +94,7 @@
     align-items: center; justify-content: center; padding: 16px; }
   .modal .card { width: 100%; max-width: 420px; max-height: 86vh; overflow: auto; background: #fff;
     border-radius: 18px; padding: 18px; touch-action: pan-y; }
+  #prof { z-index: 5; }      /* 명부 위에 겹쳐 열린다 */
   .modal h2 { margin: 0 0 4px; font-size: 19px; color: #1c2430; }
   .modal .note { font-size: 13px; color: #5b6676; margin-bottom: 12px; line-height: 1.5; }
   .modal input { width: 100%; min-height: 46px; border: 1.5px solid #cfd6e1; border-radius: 10px;
@@ -102,14 +103,14 @@
   .modal .row .btn { flex: none; }
   .modal .sec { border-top: 1px solid #e8ecf3; margin-top: 14px; padding-top: 12px; }
   .modal .sec b { display: block; font-size: 13px; color: #1c2430; margin-bottom: 2px; }
-  #floorList { display: flex; flex-direction: column; gap: 6px; }
-  #floorList button { min-height: 46px; border: 0; border-radius: 10px; background: #e8ecf3; color: #1c2430;
+  .list { display: flex; flex-direction: column; gap: 6px; }
+  .list button { min-height: 46px; border: 0; border-radius: 10px; background: #e8ecf3; color: #1c2430;
     font-family: inherit; font-size: 15px; font-weight: 700; text-align: left; padding: 0 14px;
     display: flex; justify-content: space-between; align-items: center; gap: 10px; }
-  #floorList button span { font-weight: 400; font-size: 12px; color: #5b6676; flex: none; }
-  #floorList button.here { background: #2f6fed; color: #fff; }
-  #floorList button.here span { color: #dbe6ff; }
-  #floorList button.mine { box-shadow: inset 0 0 0 2px #2f8f6f; }
+  .list button span { font-weight: 400; font-size: 12px; color: #5b6676; flex: none; }
+  .list button.here { background: #2f6fed; color: #fff; }
+  .list button.here span { color: #dbe6ff; }
+  .list button.mine { box-shadow: inset 0 0 0 2px #2f8f6f; }
   #hint {
     position: fixed; left: 50%; top: 38%; transform: translate(-50%, -50%);
     background: rgba(20,28,40,.88); color: #fff; border-radius: 16px; padding: 16px 20px;
@@ -157,7 +158,7 @@
   <div class="chip sub" id="net">재접속 중…</div>
   <div style="display:flex;gap:6px;align-items:center">
     <button class="chip sub" id="bgmBtn" type="button">음악 켬</button>
-    <div class="chip sub" id="count">접속 0명</div>
+    <button class="chip sub" id="count" type="button">접속 0명</button>
   </div>
 </div>
 <div id="chatLog"></div>
@@ -195,7 +196,7 @@
   <div class="card">
     <h2>엘리베이터</h2>
     <div class="note">가고 싶은 층을 누르세요.</div>
-    <div id="floorList"></div>
+    <div id="floorList" class="list"></div>
     <form id="pwRow" class="sec" style="display:none" autocomplete="off">
       <b>12층 사장실은 비밀번호가 걸려 있습니다</b>
       <div class="row">
@@ -229,6 +230,28 @@
       <div class="row"><button class="btn ghost" id="fiPassOff" type="button">비밀번호 해제</button></div>
     </form>
     <div style="text-align:right;margin-top:12px"><button class="btn ghost" id="fiClose" type="button">닫기</button></div>
+  </div>
+</div>
+
+<div id="prof" class="modal">
+  <div class="card">
+    <h2 id="pfName"></h2>
+    <div class="note" id="pfNote"></div>
+    <div id="pfRankSec" class="sec" style="display:none">
+      <b>직급 바꾸기</b>
+      <div class="note" style="margin:0 0 8px">자신보다 낮은 직급까지만 줄 수 있습니다.</div>
+      <div id="pfRanks" class="list"></div>
+    </div>
+    <div style="text-align:right;margin-top:12px"><button class="btn ghost" id="pfClose" type="button">닫기</button></div>
+  </div>
+</div>
+
+<div id="roster" class="modal">
+  <div class="card">
+    <h2>사원 명부</h2>
+    <div class="note" id="rsNote">불러오는 중…</div>
+    <div id="rsList" class="list"></div>
+    <div style="text-align:right;margin-top:12px"><button class="btn ghost" id="rsClose" type="button">닫기</button></div>
   </div>
 </div>
 
