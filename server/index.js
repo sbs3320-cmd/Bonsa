@@ -7,6 +7,7 @@ const config = require('./config');
 const db = require('./db');
 const auth = require('./auth');
 const Game = require('./game');
+const weather = require('./weather');
 
 const game = new Game();
 const PUBLIC = path.join(__dirname, '..', 'public');
@@ -160,6 +161,7 @@ setInterval(() => {
 }, 25000).unref();
 
 db.init().then(() => {
+  weather.start();
   server.listen(config.port, () => {
     console.log('본사 서버 시작: 포트 ' + config.port + ', 저장소 ' + db.kind);
     if (db.kind === 'memory') console.warn('[주의] DATABASE_URL 이 없어 연습용 저장소를 씁니다. 서버가 꺼지면 계정이 사라집니다.');

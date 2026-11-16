@@ -16,11 +16,15 @@
   var SHOP_Z = 15;
   var PLANTS = [[-10.8, -7.8], [10.8, 7.8], [-10.8, 7.8], [4.6, -7.8], [-4.6, -7.8]];
   var NPCS = [[-1.5, -4.5], [1.5, -4.5]];
+  var LAMPS = [[-3.3, 17], [3.3, 17], [-3.3, 27], [3.3, 27]];   // 가로등
+  var FLAG = [-9, 9.5];                                          // 깃대
 
   function c(x, z, w, d) { return { x0: x - w / 2, x1: x + w / 2, z0: z - d / 2, z1: z + d / 2 }; }
   var colOut = [c(0, 0, 16, 12)], colIn = [];
   SHOPS.forEach(function (s) { colOut.push(c(s[0], SHOP_Z, 6, 5)); });
   TREES.forEach(function (t) { colOut.push(c(t[0], t[1], 0.9, 0.9)); });
+  LAMPS.forEach(function (l) { colOut.push(c(l[0], l[1], 0.3, 0.3)); });
+  colOut.push(c(FLAG[0], FLAG[1], 0.3, 0.3));
   colIn.push(c(0, -3, 7, 1.2));                       // 안내 데스크
   NPCS.forEach(function (n) { colIn.push(c(n[0], n[1], 0.9, 0.9)); });
   colIn.push(c(8.6, 4.5, 1.1, 3), c(-8.6, 5.6, 3, 1.1), c(6.3, 4.5, 1.6, 1.6));   // 소파, 탁자
@@ -51,5 +55,5 @@
   var SPAWN = { start: { x: 0, z: 24 }, in: { x: 0, z: 6.6 }, out: { x: 0, z: 9.5 } };
 
   return { LW: LW, LD: LD, LH: LH, R: R, SPEED: SPEED, TREES: TREES, SHOPS: SHOPS, SHOP_Z: SHOP_Z,
-    PLANTS: PLANTS, NPCS: NPCS, blocked: blocked, door: door, SPAWN: SPAWN };
+    PLANTS: PLANTS, NPCS: NPCS, LAMPS: LAMPS, FLAG: FLAG, blocked: blocked, door: door, SPAWN: SPAWN };
 });
