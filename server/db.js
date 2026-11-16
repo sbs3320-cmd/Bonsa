@@ -35,23 +35,42 @@ function pgStore() {
       const r = await pool.query('SELECT * FROM users WHERE id = $1', [id]);
       return r.rows[0] || null;
     },
-    // 게시판: 최근 글 30개. 글쓴이의 현재 닉네임과 직급을 함께 꺼낸다.
+    // 게시판: 최근 글 30개(고정한 글이 먼저). 글쓴이의 현재 닉네임과 직급을 함께 꺼낸다.
     async listPosts(board) {
       const r = await pool.query(
-        `SELECT p.id, p.title, p.body, p.author, p.created_at, u.username, u.nickname, u.rank
+        `SELECT p.id, p.title, p.body, p.author, p.created_at, p.pinned, p.edited_at, u.username, u.nickname, u.rank
          FROM posts p JOIN users u ON u.id = p.author
-         WHERE p.board = $1 AND NOT p.deleted ORDER BY p.id DESC LIMIT 30`, [board]);
+         WHERE p.board = $1 AND NOT p.deleted ORDER BY p.pinned DESC, p.id DESC LIMIT 30`, [board]);
       return r.rows.map(x => ({ id: Number(x.id), title: x.title, body: x.body, author: x.author, at: new Date(x.created_at).getTime(),
-        username: x.username, nickname: x.nickname, rank: x.rank }));
+        pinned: x.pinned, edited: !!x.edited_at, username: x.username, nickname: x.nickname, rank: x.rank }));
+    },
+    // 게시판에 종이로 붙는 글(고정한 글). board 를 주지 않으면 모든 게시판.
+    async listPinned(board) {
+      const r = await pool.query(
+        `SELECT p.id, p.board, p.title, u.nickname FROM posts p JOIN users u ON u.id = p.author
+         WHERE p.pinned AND NOT p.deleted AND ($1::int IS NULL OR p.board = $1) ORDER BY p.id`, [board === undefined ? null : board]);
+      return r.rows.map(x => ({ id: Number(x.id), board: x.board, title: x.title, nickname: x.nickname }));
     },
     async addPost(board, author, title, body) {
-      await pool.query('INSERT INTO posts (board, author, title, body) VALUES ($1, $2, $3, $4)', [board, author, title, body]);
+      const r = await pool.query('INSERT INTO posts (board, author, title, body) VALUES ($1, $2, $3, $4) RETURNING id', [board, author, title, body]);
+      return Number(r.rows[0].id);
     },
     async getPost(id) {
-      const r = await pool.query('SELECT id, board, author, title FROM posts WHERE id = $1 AND NOT deleted', [id]);
-      return r.rows[0] || null;
+      const r = await pool.query('SELECT id, board, author, title, pinned FROM posts WHERE id = $1 AND NOT deleted', [id]);
+      return r.rows[0] ? Object.assign(r.rows[0], { id: Number(r.rows[0].id) }) : null;
     },
-    async deletePost(id) { await pool.query('UPDATE posts SET deleted = TRUE WHERE id = $1', [id]); },
+    async updatePost(id, title, body) {
+      await pool.query('UPDATE posts SET title = $2, body = $3, edited_at = now() WHERE id = $1 AND NOT deleted', [id, title, body]);
+    },
+    async deletePost(id) { await pool.query('UPDATE posts SET deleted = TRUE, pinned = FALSE WHERE id = $1', [id]); },
+    // 고정: 그 게시판의 고정 글이 cap 개 미만일 때만 성공한다
+    async pinPost(id, board, cap) {
+      const r = await pool.query(
+        `UPDATE posts SET pinned = TRUE WHERE id = $1 AND NOT deleted AND NOT pinned
+         AND (SELECT count(*) FROM posts WHERE board = $2 AND pinned AND NOT deleted) < $3`, [id, board, cap]);
+      return r.rowCount === 1;
+    },
+    async unpinPost(id) { await pool.query('UPDATE posts SET pinned = FALSE WHERE id = $1', [id]); },
     // 사원 명부 (비밀번호 해시는 꺼내지 않는다)
     async listUsers() {
       const r = await pool.query('SELECT id, username, nickname, rank, floor FROM users WHERE banned = FALSE ORDER BY id LIMIT 300');
@@ -125,14 +144,26 @@ function memoryStore() {
     async findByUsername(username) { return users.find(u => u.username === username) || null; },
     async findById(id) { return users.find(u => u.id === id) || null; },
     async listPosts(board) {
-      return posts.filter(x => x.board === board && !x.deleted).slice(-30).reverse().map(x => {
+      return posts.filter(x => x.board === board && !x.deleted).sort((x, y) => (y.pinned - x.pinned) || (y.id - x.id)).slice(0, 30).map(x => {
         const u = users.find(v => v.id === x.author);
-        return { id: x.id, title: x.title, body: x.body, author: x.author, at: x.at, username: u.username, nickname: u.nickname, rank: u.rank };
+        return { id: x.id, title: x.title, body: x.body, author: x.author, at: x.at, pinned: x.pinned, edited: x.edited,
+          username: u.username, nickname: u.nickname, rank: u.rank };
       });
     },
-    async addPost(board, author, title, body) { posts.push({ id: ++postSeq, board, author, title, body, at: Date.now(), deleted: false }); },
+    async listPinned(board) {
+      return posts.filter(x => x.pinned && !x.deleted && (board === undefined || x.board === board))
+        .map(x => ({ id: x.id, board: x.board, title: x.title, nickname: users.find(v => v.id === x.author).nickname }));
+    },
+    async addPost(board, author, title, body) { posts.push({ id: ++postSeq, board, author, title, body, at: Date.now(), deleted: false, pinned: false, edited: false }); return postSeq; },
     async getPost(id) { return posts.find(x => x.id === id && !x.deleted) || null; },
-    async deletePost(id) { const x = posts.find(y => y.id === id); if (x) x.deleted = true; },
+    async updatePost(id, title, body) { const x = posts.find(y => y.id === id); if (x) { x.title = title; x.body = body; x.edited = true; } },
+    async deletePost(id) { const x = posts.find(y => y.id === id); if (x) { x.deleted = true; x.pinned = false; } },
+    async pinPost(id, board, cap) {
+      const x = posts.find(y => y.id === id && !y.deleted);
+      if (!x || x.pinned || posts.filter(y => y.board === board && y.pinned && !y.deleted).length >= cap) return false;
+      x.pinned = true; return true;
+    },
+    async unpinPost(id) { const x = posts.find(y => y.id === id); if (x) x.pinned = false; },
     async listUsers() { return users.filter(u => !u.banned).map(u => ({ id: u.id, username: u.username, nickname: u.nickname, rank: u.rank, floor: u.floor })); },
     async setRank(uid, from, to) { const u = users.find(x => x.id === uid); if (!u || u.rank !== from) return false; u.rank = to; return true; },
     async demoteOtherCeos(uid) { const ids = []; users.forEach(u => { if (u.rank === 'ceo' && u.id !== uid) { u.rank = 'manager'; ids.push(u.id); } }); return ids; },

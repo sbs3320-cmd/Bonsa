@@ -36,3 +36,7 @@ CREATE TABLE IF NOT EXISTS posts (
   deleted     BOOLEAN NOT NULL DEFAULT FALSE
 );
 CREATE INDEX IF NOT EXISTS posts_board_idx ON posts (board, id DESC) WHERE NOT deleted;
+
+-- 게시판 개편: 고정한 글만 게시판에 종이로 붙는다. 수정 시각도 남긴다.
+ALTER TABLE posts ADD COLUMN IF NOT EXISTS pinned BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE posts ADD COLUMN IF NOT EXISTS edited_at TIMESTAMPTZ;
