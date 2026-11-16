@@ -19,5 +19,7 @@ module.exports = {
   sessionSecret: secret,
   sessionTtlMs: 24 * 60 * 60 * 1000,
   maxUsers: Number(process.env.MAX_USERS) || 200,
-  maxOnline: Number(process.env.MAX_ONLINE) || 100
+  maxOnline: Number(process.env.MAX_ONLINE) || 100,
+  // 총관리자 계정의 로그인 아이디. 비밀번호는 여기에 두지 않는다 (가입할 때 정한 것이 해시로 DB에만 있다).
+  superAdmin: (process.env.SUPERADMIN_USERNAME || '').trim().toLowerCase()
 };

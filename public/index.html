@@ -5,10 +5,12 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>본사</title>
 <style>
+  @font-face { font-family: "Maplestory"; src: url("/fonts/Maplestory-Light.ttf") format("truetype"); font-weight: 400; font-display: swap; }
+  @font-face { font-family: "Maplestory"; src: url("/fonts/Maplestory-Bold.ttf") format("truetype"); font-weight: 700; font-display: swap; }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   html, body {
     margin: 0; height: 100%; overflow: hidden; background: #1c2430;
-    font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", sans-serif;
+    font-family: "Maplestory", -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", sans-serif;
     touch-action: none; overscroll-behavior: none;
     -webkit-user-select: none; user-select: none;
   }
@@ -32,6 +34,9 @@
     margin: -28px 0 0 -28px; border-radius: 50%;
     background: rgba(255,255,255,.82); box-shadow: 0 2px 8px rgba(0,0,0,.3);
   }
+  /* 터치 기기: 조이스틱은 평소에 숨어 있다가 누른 자리에 나타난다 */
+  .touch #stick { display: none; pointer-events: none; }
+  #bgmBtn { pointer-events: auto; border: 0; font-family: inherit; min-height: 32px; }
   #act {
     position: fixed; right: 22px; bottom: 44px; min-width: 96px; min-height: 64px;
     padding: 0 20px; border: 0; border-radius: 32px; background: #2f6fed; color: #fff;
@@ -130,7 +135,10 @@
     <div class="chip sub" id="wx"></div>
   </div>
   <div class="chip sub" id="net">재접속 중…</div>
-  <div class="chip sub" id="count">접속 0명</div>
+  <div style="display:flex;gap:6px;align-items:center">
+    <button class="chip sub" id="bgmBtn" type="button">음악 켬</button>
+    <div class="chip sub" id="count">접속 0명</div>
+  </div>
 </div>
 <div id="chatLog"></div>
 <div id="stick"><div id="knob"></div></div>

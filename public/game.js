@@ -1,16 +1,16 @@
-(function () {
+function bonsaBoot() {
   'use strict';
   var $ = function (id) { return document.getElementById(id); };
   if (!window.THREE || !window.World) { $('err').style.display = 'flex'; $('auth').style.display = 'none'; return; }
   var W = window.World, LW = W.LW, LD = W.LD, LH = W.LH;
 
   /* ---------- 운영자가 나중에 바꿀 수 있는 문구 (8단계에서 관리자 화면으로 이동) ---------- */
-  var RANKS = { intern: '인턴', staff: '사원', deputy: '부팀장', lead: '팀장', manager: '부장', ceo: '사장' };
+  var RANKS = { owner: '총관리자', intern: '인턴', staff: '사원', deputy: '부팀장', lead: '팀장', manager: '부장', ceo: '사장' };
   var NPC_GREETING = '반갑습니다, 본사입니다';
   var GUIDE = [
     '반갑습니다, 본사입니다. 게임 방법을 간단히 안내해 드릴게요.',
     '이동: 화면 왼쪽 조이스틱으로 걷고, 화면을 드래그하면 시점이 돌아갑니다. PC에서는 WASD와 마우스 드래그를 씁니다.',
-    '날씨: 바깥은 실제 대한민국 시각과 서울 날씨를 따라갑니다. 비나 눈이 오면 우산 버튼이 나타나요.',
+    '날씨: 바깥은 실제 대한민국 시각과 울산 날씨를 따라갑니다. 비나 눈이 오면 우산 버튼이 나타나요.',
     '엘리베이터: 층 사이는 엘리베이터로만 이동합니다. 타면 층 선택 화면이 뜨고, 이름이 등록된 층은 그 이름으로 보입니다.',
     '층 등록: 2~11층 중 한 곳에 입장 등록을 할 수 있습니다. 한 사람은 한 층에만 등록할 수 있어요.',
     '꾸미기: 등록한 층에서는 가구와 소품을 놓고, 옮기고, 돌리고, 지울 수 있습니다.',
@@ -103,7 +103,7 @@
     ctx.arcTo(x, y, x + w, y, r);
     ctx.closePath();
   }
-  var FONT = '"Apple SD Gothic Neo","Noto Sans KR","Malgun Gothic",sans-serif';
+  var FONT = '"Maplestory","Apple SD Gothic Neo","Noto Sans KR","Malgun Gothic",sans-serif';
   function textTexture(text, o) {
     o = o || {};
     var fs = o.fs || 56, padX = o.padX || 28, padY = o.padY || 16;
@@ -144,7 +144,16 @@
   var gEye = new THREE.SphereGeometry(0.055, 8, 8);
   var gFoot = new THREE.SphereGeometry(0.17, 12, 8);
   var gArm = new THREE.SphereGeometry(0.13, 10, 8);
-  var gStrap = new THREE.TorusGeometry(0.3, 0.025, 6, 20);
+  var gStrap = new THREE.TorusGeometry(0.31, 0.04, 8, 24);
+  var gLan = new THREE.BoxGeometry(0.05, 0.26, 0.02);       // 목걸이 줄
+  var gCard = new THREE.BoxGeometry(0.34, 0.42, 0.03), gCardTop = new THREE.BoxGeometry(0.34, 0.11, 0.036);
+  var gPhoto = new THREE.BoxGeometry(0.13, 0.15, 0.036), gLine = new THREE.BoxGeometry(0.11, 0.028, 0.036);
+  var gClip = new THREE.BoxGeometry(0.08, 0.07, 0.04);
+  var gCheek = new THREE.SphereGeometry(0.075, 10, 8), gMouth = new THREE.TorusGeometry(0.06, 0.014, 5, 10, Math.PI);
+  var LANYARD = 0x2f9bff;
+  function part(geo, color, x, y, z, parent) {
+    var m = new THREE.Mesh(geo, mat(color)); m.position.set(x, y, z); parent.add(m); return m;
+  }
   var gShadow = new THREE.CircleGeometry(0.58, 20);
   var shadowMat = new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.2, depthWrite: false });
   var gUmbTop = new THREE.ConeGeometry(1.05, 0.4, 12, 1, true);
@@ -179,10 +188,24 @@
       var f = new THREE.Mesh(gFoot, mat(0x39424f));
       f.scale.set(1, 0.6, 1.3); f.position.set(x, 0.1, 0.05); g.add(f); feet.push(f);
     });
-    var strap = new THREE.Mesh(gStrap, mat(0x2f6fed));
-    strap.rotation.x = Math.PI / 2 - 0.5; strap.position.set(0, 1.08, 0.1); g.add(strap);
-    box(0.2, 0.26, 0.03, 0xffffff, 0, 0.8, 0.49, g);
-    box(0.2, 0.07, 0.035, 0x2f6fed, 0, 0.89, 0.49, g);
+    // 얼굴: 볼과 입
+    [-0.25, 0.25].forEach(function (x) {
+      var ck = part(gCheek, 0xf59aa0, x, 1.36, 0.29, g); ck.scale.set(1, 0.7, 0.5);
+    });
+    var mouth = part(gMouth, 0x1c2430, 0, 1.36, 0.385, g); mouth.rotation.z = Math.PI;
+    // 사원증: 목에 두른 줄이 앞으로 모여 내려오고, 그 끝에 큼직한 카드가 달린다
+    var strap = part(gStrap, LANYARD, 0, 1.09, 0.04, g);
+    strap.rotation.x = Math.PI / 2 - 0.22;
+    var l1 = part(gLan, LANYARD, -0.1, 1.02, 0.4, g); l1.rotation.set(0.5, 0, -0.72);
+    var l2 = part(gLan, LANYARD, 0.1, 1.02, 0.4, g); l2.rotation.set(0.5, 0, 0.72);
+    part(gClip, 0xc9d0da, 0, 0.94, 0.47, g);
+    var badge = new THREE.Group();
+    part(gCard, 0xffffff, 0, 0, 0, badge);
+    part(gCardTop, LANYARD, 0, 0.155, 0, badge);
+    part(gPhoto, 0xffd9a8, -0.08, -0.03, 0, badge);
+    part(gLine, 0x8a94a3, 0.08, 0.0, 0, badge); part(gLine, 0xb7bfca, 0.08, -0.06, 0, badge);
+    part(gLine, 0xb7bfca, 0, -0.16, 0, badge).scale.x = 2.4;
+    badge.position.set(0, 0.71, 0.5); badge.rotation.x = -0.08; g.add(badge);
     // 팔, 발밑 그림자, 우산(평소에는 숨김)
     var arms = [];
     [-0.52, 0.52].forEach(function (x) {
@@ -643,6 +666,68 @@
   });
   $('chatIn').addEventListener('keydown', function (e) { if (e.key === 'Escape') closeChat(); });
 
+  /* ---------- 배경 음악: 음원 파일 없이 브라우저가 직접 연주하는 짧은 자작 반복곡 ---------- */
+  var bgm = { on: true, ctx: null, out: null, timer: 0, next: 0, step: 0 };
+  try { bgm.on = localStorage.getItem('bonsa_bgm') !== '0'; } catch (e) {}
+  var N = { G4: 392.0, A4: 440.0, C5: 523.25, D5: 587.33, E5: 659.25, G5: 783.99, A5: 880.0 };
+  var CHORDS = [[261.63, 329.63, 392.0], [220.0, 261.63, 329.63], [174.61, 220.0, 261.63], [196.0, 246.94, 293.66]];   // C Am F G
+  var MELODY = [
+    'E5', 0, 'G5', 0, 'E5', 'D5', 'C5', 0,   'A4', 0, 'C5', 0, 'E5', 0, 'D5', 0,
+    'C5', 0, 'A4', 0, 'C5', 'D5', 'E5', 0,   'D5', 0, 'D5', 0, 'G4', 0, 'D5', 0,
+    'G5', 0, 'E5', 0, 'C5', 0, 'E5', 'G5',   'A5', 0, 'G5', 0, 'E5', 0, 'C5', 0,
+    'A4', 'C5', 0, 'E5', 0, 'D5', 'C5', 0,   'D5', 0, 'E5', 'D5', 0, 'G4', 0, 0];
+  var BEAT = 60 / 86 / 2;
+  function tone(freq, at, dur, type, vol) {
+    var o = bgm.ctx.createOscillator(), g = bgm.ctx.createGain();
+    o.type = type; o.frequency.value = freq;
+    g.gain.setValueAtTime(0.0001, at);
+    g.gain.linearRampToValueAtTime(vol, at + 0.03);
+    g.gain.exponentialRampToValueAtTime(0.0001, at + dur);
+    o.connect(g); g.connect(bgm.out);
+    o.start(at); o.stop(at + dur + 0.05);
+  }
+  function bgmSchedule() {
+    if (!bgm.ctx) return;
+    while (bgm.next < bgm.ctx.currentTime + 0.4) {
+      var s = bgm.step % MELODY.length, inBar = s % 8, chord = CHORDS[Math.floor(s / 8) % 4], at = bgm.next;
+      if (inBar === 0) chord.forEach(function (f) { tone(f, at, BEAT * 8, 'sine', 0.05); });
+      if (inBar === 0 || inBar === 4) tone(chord[0] / 2, at, BEAT * 3, 'triangle', 0.11);
+      if (MELODY[s]) tone(N[MELODY[s]], at, BEAT * 1.9, 'triangle', 0.085);
+      bgm.next += BEAT; bgm.step++;
+    }
+  }
+  function bgmStart() {
+    if (!bgm.on || bgm.timer) return;
+    var AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return;
+    try {
+      if (!bgm.ctx) {
+        bgm.ctx = new AC();
+        var lp = bgm.ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 2200;
+        bgm.out = bgm.ctx.createGain(); bgm.out.gain.value = 0.55;
+        bgm.out.connect(lp); lp.connect(bgm.ctx.destination);
+      }
+      if (bgm.ctx.state === 'suspended') bgm.ctx.resume();
+      bgm.next = bgm.ctx.currentTime + 0.1;
+      bgm.timer = setInterval(bgmSchedule, 120);
+    } catch (e) { bgm.ctx = null; }
+  }
+  function bgmStop() {
+    clearInterval(bgm.timer); bgm.timer = 0;
+    if (bgm.ctx && bgm.ctx.state === 'running') bgm.ctx.suspend();
+  }
+  function bgmLabel() { $('bgmBtn').textContent = bgm.on ? '음악 켬' : '음악 끔'; }
+  bgmLabel();
+  $('bgmBtn').addEventListener('click', function () {
+    bgm.on = !bgm.on;
+    try { localStorage.setItem('bonsa_bgm', bgm.on ? '1' : '0'); } catch (e) {}
+    bgmLabel();
+    if (bgm.on) bgmStart(); else bgmStop();
+  });
+  // 브라우저는 사용자가 화면을 한 번 눌러야 소리를 허용한다
+  document.addEventListener('pointerdown', function () { if (playing) bgmStart(); });
+  document.addEventListener('visibilitychange', function () { if (document.hidden) bgmStop(); else if (playing) bgmStart(); });
+
   /* ---------- 로그인과 회원가입 ---------- */
   var mode = 'login', token = null;
   try { token = localStorage.getItem('bonsa_token'); } catch (e) {}
@@ -673,6 +758,7 @@
       token = j.token;
       try { localStorage.setItem('bonsa_token', token); } catch (err) {}
       $('fPass').value = '';
+      bgmStart();
       connect();
     }).catch(function () {
       $('authGo').disabled = false; $('authMsg').textContent = '서버에 연결하지 못했습니다.';
@@ -717,7 +803,7 @@
         setOthers(m.players);
         $('count').textContent = '접속 ' + m.online + '명';
         $('auth').style.display = 'none'; $('net').style.display = 'none';
-        if (!playing) logLine('왼쪽 조이스틱으로 이동, 화면을 드래그해 시점 회전');
+        if (!playing) logLine(TOUCH ? '화면 왼쪽을 누른 채 끌면 이동, 오른쪽을 끌면 시점 회전' : 'WASD 또는 왼쪽 조이스틱으로 이동, 화면을 드래그해 시점 회전');
         playing = true;
         break;
       case 'join': addOther(m.p); break;
@@ -809,7 +895,7 @@
     if (t > E.chipAt) {
       E.chipAt = t + 1;
       var hh = Math.floor(h), mm = Math.floor((h - hh) * 60);
-      var txt = '서울 ' + (hh < 10 ? '0' : '') + hh + ':' + (mm < 10 ? '0' : '') + mm + ' · ' + KIND_KO[wx.k] + (wx.temp === null ? '' : ' ' + wx.temp + '°');
+      var txt = '울산 ' + (hh < 10 ? '0' : '') + hh + ':' + (mm < 10 ? '0' : '') + mm + ' · ' + KIND_KO[wx.k] + (wx.temp === null ? '' : ' ' + wx.temp + '°');
       if ($('wx').textContent !== txt) $('wx').textContent = txt;
       if (env.clockMin !== mm && env.clockCtx) {
         env.clockMin = mm;
@@ -951,21 +1037,38 @@
   stick.addEventListener('pointerup', joyEnd);
   stick.addEventListener('pointercancel', joyEnd);
 
+  // 터치 기기에서는 화면 왼쪽 절반을 누르면 그 자리에 조이스틱이 생긴다
+  var TOUCH = !!(window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
+  if (TOUCH) document.body.classList.add('touch');
+  function floatEnd(e) {
+    if (e.pointerId !== joy.id) return false;
+    joyEnd(e); stick.style.display = '';
+    return true;
+  }
   var look = { id: null, x: 0, y: 0 };
   canvas.addEventListener('pointerdown', function (e) {
     if (chatOpen) { closeChat(); return; }
+    if (e.pointerType === 'touch' && joy.id === null && playing && !uiOpen && e.clientX < window.innerWidth * 0.5) {
+      joy.id = e.pointerId;
+      stick.style.left = (e.clientX - 64) + 'px'; stick.style.top = (e.clientY - 64) + 'px'; stick.style.bottom = 'auto';
+      stick.style.display = 'block';
+      try { canvas.setPointerCapture(e.pointerId); } catch (err) {}
+      joyMove(e); e.preventDefault();
+      return;
+    }
     if (look.id !== null) return;
     look.id = e.pointerId; look.x = e.clientX; look.y = e.clientY;
     try { canvas.setPointerCapture(e.pointerId); } catch (err) {}
   });
   canvas.addEventListener('pointermove', function (e) {
+    if (joy.id !== null && e.pointerId === joy.id) { joyMove(e); return; }
     if (e.pointerId !== look.id) return;
     cam.yaw -= (e.clientX - look.x) * 0.007;
     cam.pitch += (e.clientY - look.y) * 0.005;
     cam.pitch = Math.max(0.12, Math.min(1.05, cam.pitch));
     look.x = e.clientX; look.y = e.clientY;
   });
-  function lookEnd(e) { if (e.pointerId === look.id) look.id = null; }
+  function lookEnd(e) { if (floatEnd(e)) return; if (e.pointerId === look.id) look.id = null; }
   canvas.addEventListener('pointerup', lookEnd);
   canvas.addEventListener('pointercancel', lookEnd);
   document.addEventListener('contextmenu', function (e) { e.preventDefault(); });
@@ -1101,4 +1204,13 @@
   requestAnimationFrame(frame);
 
   if (token) connect(); else showAuth();
+}
+// 글꼴을 먼저 불러온 뒤 시작한다 (간판과 이름표 글씨를 그림으로 굽기 때문). 4초 안에 안 오면 그냥 시작.
+(function () {
+  var started = false;
+  function go() { if (!started) { started = true; bonsaBoot(); } }
+  if (document.fonts && document.fonts.load) {
+    Promise.all([document.fonts.load('700 40px "Maplestory"', '본사'), document.fonts.load('400 20px "Maplestory"', '본사')]).then(go, go);
+    setTimeout(go, 4000);
+  } else go();
 })();

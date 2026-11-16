@@ -49,7 +49,8 @@ class Game {
       return null;
     }
     const p = {
-      id: user.id, name: user.nickname, rank: user.rank, ws,
+      id: user.id, name: user.nickname, ws,
+      rank: config.superAdmin && user.username === config.superAdmin ? 'owner' : user.rank,
       area: 'out', x: World.SPAWN.start.x + (Math.random() * 4 - 2), z: World.SPAWN.start.z + Math.random() * 2,
       f: Math.PI, dirty: false, lastMove: Date.now(), moveSec: 0, moveCount: 0, chatTimes: [],
       umb: false, lastUmb: 0

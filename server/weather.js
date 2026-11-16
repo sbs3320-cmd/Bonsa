@@ -1,8 +1,8 @@
 'use strict';
-// 서울의 실제 날씨를 10분마다 받아 와 접속자 모두에게 같은 값을 알려 준다.
+// 울산의 실제 날씨를 10분마다 받아 와 접속자 모두에게 같은 값을 알려 준다.
 // 브라우저가 외부 주소에 직접 접속하지 않도록(보안 정책 유지) 서버가 대신 받아 온다.
 // 출처: Open-Meteo (무료, 키 없음). 받아 온 값은 숫자 범위를 확인한 뒤에만 쓴다.
-const URL_WX = 'https://api.open-meteo.com/v1/forecast?latitude=37.5665&longitude=126.978' +
+const URL_WX = 'https://api.open-meteo.com/v1/forecast?latitude=35.5384&longitude=129.3114' +
   '&current=temperature_2m,weather_code,wind_speed_10m,wind_direction_10m,cloud_cover' +
   '&daily=sunrise,sunset&wind_speed_unit=ms&timezone=Asia%2FSeoul&forecast_days=1';
 const REFRESH_MS = 10 * 60 * 1000;

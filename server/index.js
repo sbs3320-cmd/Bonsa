@@ -2,6 +2,7 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
+const zlib = require('zlib');
 const { WebSocketServer } = require('ws');
 const config = require('./config');
 const db = require('./db');
@@ -14,8 +15,11 @@ const PUBLIC = path.join(__dirname, '..', 'public');
 const FILES = {
   '/': ['index.html', 'text/html; charset=utf-8'],
   '/game.js': ['game.js', 'text/javascript; charset=utf-8'],
-  '/world.js': ['world.js', 'text/javascript; charset=utf-8']
+  '/world.js': ['world.js', 'text/javascript; charset=utf-8'],
+  '/fonts/Maplestory-Light.ttf': ['fonts/Maplestory-Light.ttf', 'font/ttf', true],
+  '/fonts/Maplestory-Bold.ttf': ['fonts/Maplestory-Bold.ttf', 'font/ttf', true]
 };
+const fontCache = new Map();          // 글꼴은 크므로 한 번 압축해 두고 다시 쓴다
 const CSP = "default-src 'self'; script-src 'self' https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline'; " +
   "img-src 'self' data: blob:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'";
 
@@ -106,6 +110,18 @@ const server = http.createServer((req, res) => {
 
   const file = req.method === 'GET' ? FILES[url] : null;
   if (!file) { res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' }); return res.end('Not found'); }
+  if (file[2]) {
+    let buf = fontCache.get(file[0]);
+    if (!buf) {
+      try { buf = zlib.gzipSync(fs.readFileSync(path.join(PUBLIC, file[0]))); } catch (e) { res.writeHead(500); return res.end(); }
+      fontCache.set(file[0], buf);
+    }
+    const gz = /\bgzip\b/.test(req.headers['accept-encoding'] || '');
+    const head = { 'Content-Type': file[1], 'Cache-Control': 'public, max-age=604800', 'Vary': 'Accept-Encoding' };
+    if (gz) head['Content-Encoding'] = 'gzip';
+    res.writeHead(200, head);
+    return res.end(gz ? buf : zlib.gunzipSync(buf));
+  }
   fs.readFile(path.join(PUBLIC, file[0]), (err, data) => {
     if (err) { res.writeHead(500); return res.end(); }
     res.writeHead(200, { 'Content-Type': file[1], 'Cache-Control': 'no-cache', 'Content-Security-Policy': CSP });
