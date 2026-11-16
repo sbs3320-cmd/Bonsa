@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>본사 관리자</title>
+<style>
+  @font-face { font-family: "Maplestory"; src: url("/fonts/Maplestory-Light.ttf") format("truetype"); font-weight: 400; font-display: swap; }
+  @font-face { font-family: "Maplestory"; src: url("/fonts/Maplestory-Bold.ttf") format("truetype"); font-weight: 700; font-display: swap; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #f1f3f6; color: #1c2430; font-family: "Maplestory", -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif; font-size: 15px; line-height: 1.5; }
+  header { background: #1c2430; color: #fff; padding: 12px 16px; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  header h1 { margin: 0; font-size: 18px; }
+  main { max-width: 1100px; margin: 0 auto; padding: 16px; }
+  .card { background: #fff; border-radius: 14px; padding: 16px; margin-bottom: 14px; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+  .card h2 { margin: 0 0 8px; font-size: 17px; }
+  .note { color: #5b6676; font-size: 13px; margin-bottom: 10px; }
+  input, select, textarea { font-family: inherit; font-size: 15px; min-height: 42px; padding: 0 10px; border: 1.5px solid #cfd6e1; border-radius: 9px; color: #1c2430; background: #fff; max-width: 100%; }
+  textarea { padding: 10px; width: 100%; min-height: 160px; }
+  button { font-family: inherit; font-size: 14px; font-weight: 700; min-height: 40px; padding: 0 14px; border: 0; border-radius: 9px; background: #2f6fed; color: #fff; cursor: pointer; }
+  button.ghost { background: #e8ecf3; color: #1c2430; }
+  button.danger { background: #c73a3a; }
+  button:disabled { opacity: .5; cursor: default; }
+  #tabs { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 8px; margin-bottom: 8px; }
+  #tabs button { flex: none; background: #e8ecf3; color: #1c2430; }
+  #tabs button.on { background: #1c2430; color: #fff; }
+  .scroll { overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; font-size: 14px; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid #e8ecf3; vertical-align: middle; white-space: nowrap; }
+  td.wrap { white-space: pre-wrap; word-break: break-word; min-width: 220px; }
+  th { color: #5b6676; font-weight: 700; font-size: 12px; }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 8px 0; }
+  .tag { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 12px; background: #e8ecf3; }
+  .tag.on { background: #d9f2e3; color: #17603b; }
+  .tag.bad { background: #fbe1e1; color: #8f2323; }
+  #msg { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); background: #1c2430; color: #fff; padding: 10px 16px; border-radius: 10px; display: none; max-width: 90%; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+  .stat { background: #f1f3f6; border-radius: 10px; padding: 12px; }
+  .stat b { display: block; font-size: 22px; }
+  #login { max-width: 420px; margin: 40px auto; }
+  #login input { width: 100%; margin-bottom: 10px; }
+  code { background: #f1f3f6; padding: 4px 8px; border-radius: 6px; font-size: 15px; word-break: break-all; user-select: all; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<header><h1>본사 관리자</h1><button class="ghost" id="logout" type="button" hidden>로그아웃</button></header>
+<main>
+  <div class="card" id="login">
+    <h2>총관리자 로그인</h2>
+    <div class="note" id="loginNote">총관리자 계정의 아이디와 비밀번호, 인증 앱의 6자리 코드로 들어옵니다.</div>
+    <form id="loginForm" autocomplete="off">
+      <input id="lUser" placeholder="아이디" autocapitalize="none" autocomplete="username" maxlength="16">
+      <input id="lPass" type="password" placeholder="비밀번호" autocomplete="current-password" maxlength="72">
+      <input id="lCode" placeholder="인증 코드 6자리" inputmode="numeric" maxlength="6" autocomplete="one-time-code" hidden>
+      <button type="submit">들어가기</button>
+    </form>
+    <form id="setupForm" autocomplete="off" hidden>
+      <div class="note">2단계 인증을 처음 등록합니다. 휴대폰에 인증 앱(Google Authenticator, Microsoft Authenticator 등)을 깔고, "직접 입력" 또는 "설정 키 입력"을 골라 아래 키를 넣으세요. 계정 이름은 아무 것이나 괜찮고, 종류는 "시간 기준"입니다.</div>
+      <p><code id="sKey"></code></p>
+      <div class="note">앱에 6자리 숫자가 나오면 아래에 넣어 주세요. 이 키는 지금만 보이니 앱에 넣기 전에는 창을 닫지 마세요.</div>
+      <input id="sCode" placeholder="인증 코드 6자리" inputmode="numeric" maxlength="6" autocomplete="one-time-code">
+      <button type="submit">등록하고 들어가기</button>
+    </form>
+  </div>
+
+  <div id="app" hidden>
+    <div id="tabs"></div>
+    <div id="view"></div>
+  </div>
+</main>
+<div id="msg"></div>
+<script src="/admin/admin.js"></script>
+</body>
+</html>

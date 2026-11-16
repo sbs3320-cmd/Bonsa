@@ -1191,6 +1191,31 @@ function bonsaBoot() {
     return found;
   }
 
+  /* ---------- 총관리자가 바꾸는 설정: 값표, 안내원 대사, 공지 ---------- */
+  var GUIDE_DEFAULT = GUIDE.slice(), HI_DEFAULT = NPC_GREETING, lastNotice = '';
+  function applyCfg(cfg, first) {
+    if (!cfg || typeof cfg !== 'object') return;
+    var k, v, bs, i;
+    if (cfg.prices && typeof cfg.prices === 'object') {
+      for (k in cfg.prices) {
+        v = Number(cfg.prices[k]);
+        if (!(v >= 0)) continue;
+        if (Object.prototype.hasOwnProperty.call(W.FURN, k)) W.FURN[k].price = v;
+        else if (Object.prototype.hasOwnProperty.call(W.COSM, k)) W.COSM[k].price = v;
+      }
+      bs = $('decoTypes').children;
+      for (i = 0; i < bs.length; i++) { k = bs[i].getAttribute('data-type'); bs[i].textContent = W.FURN[k].n + ' ' + W.FURN[k].price; }
+      if (deco.on) renderDeco();
+      if (shopOpen()) sendMsg({ t: 'shop' });
+    }
+    if (cfg.npc && typeof cfg.npc === 'object') {
+      NPC_GREETING = typeof cfg.npc.hi === 'string' && cfg.npc.hi ? cfg.npc.hi : HI_DEFAULT;
+      GUIDE = Array.isArray(cfg.npc.guide) && cfg.npc.guide.length ? cfg.npc.guide.map(String) : GUIDE_DEFAULT;
+    }
+    if (typeof cfg.notice === 'string' && cfg.notice && (first || cfg.notice !== lastNotice)) logLine('[공지] ' + cfg.notice);
+    if (typeof cfg.notice === 'string') lastNotice = cfg.notice;
+  }
+
   /* ---------- 상점과 치장 (값과 보유 여부는 서버가 판정한다) ---------- */
   function moneyText() { return '내 돈 ' + (me.money || 0) + '코인'; }
   function shopOpen() { return $('shop').style.display === 'flex'; }
@@ -1541,6 +1566,7 @@ function bonsaBoot() {
         setTag(player, tagOf(m.me.r, m.me.n));
         me.r = m.me.r; me.n = m.me.n; me.floor = m.me.floor || null;
         if (m.floors) setFloors(m.floors);
+        applyCfg(m.cfg, true);
         player.userData.umb.children[0].material = umbMats[myId % umbMats.length];
         if (typeof m.now === 'number') clockOffset = m.now - Date.now();
         if (m.wx) setWeather(m.wx, true);
@@ -1596,6 +1622,7 @@ function bonsaBoot() {
         else if (others[m.id]) applyLook(others[m.id].g, m.id, m.c || '', m.h || '');
         break;
       case 'shop': renderShop(m); break;
+      case 'cfg': applyCfg(m.cfg, false); break;
       case 'events': renderEvents(m); break;
       case 'evdirty': if (eventsOpen()) sendMsg({ t: 'events' }); break;
       case 'sit':

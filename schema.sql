@@ -86,3 +86,7 @@ CREATE TABLE IF NOT EXISTS user_items (
   item     TEXT NOT NULL,
   PRIMARY KEY (user_id, item)
 );
+
+-- 가구를 놓을 때 낸 값. 치우면 이 값만큼 놓은 사람에게 돌려준다 (값을 받기 전에 놓인 가구는 0).
+ALTER TABLE furniture ADD COLUMN IF NOT EXISTS paid INTEGER NOT NULL DEFAULT 0;
+CREATE INDEX IF NOT EXISTS audit_log_id_idx ON audit_log (id DESC);

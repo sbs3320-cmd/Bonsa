@@ -149,15 +149,42 @@ function pgStore() {
     },
     // 가구
     async loadFurniture() {
-      const r = await pool.query('SELECT id, floor, type, x, z, rot FROM furniture ORDER BY id');
-      return r.rows.map(x => ({ id: Number(x.id), floor: x.floor, type: x.type, x: Number(x.x), z: Number(x.z), rot: x.rot }));
+      const r = await pool.query('SELECT id, floor, type, x, z, rot, owner, paid FROM furniture ORDER BY id');
+      return r.rows.map(x => ({ id: Number(x.id), floor: x.floor, type: x.type, x: Number(x.x), z: Number(x.z), rot: x.rot, owner: x.owner, paid: x.paid }));
     },
-    async addFurniture(floor, type, x, z, rot, owner) {
-      const r = await pool.query('INSERT INTO furniture (floor, type, x, z, rot, owner) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id', [floor, type, x, z, rot, owner]);
+    async addFurniture(floor, type, x, z, rot, owner, paid) {
+      const r = await pool.query('INSERT INTO furniture (floor, type, x, z, rot, owner, paid) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id', [floor, type, x, z, rot, owner, paid]);
       return Number(r.rows[0].id);
     },
     async moveFurniture(id, x, z, rot) { await pool.query('UPDATE furniture SET x = $2, z = $3, rot = $4 WHERE id = $1', [id, x, z, rot]); },
-    async deleteFurniture(id) { await pool.query('DELETE FROM furniture WHERE id = $1', [id]); },
+    // 치우기: 지워진 줄이 있을 때만 true (두 사람이 동시에 치워도 환불은 한 번만 나가게)
+    async deleteFurniture(id) { return (await pool.query('DELETE FROM furniture WHERE id = $1', [id])).rowCount === 1; },
+    // ---- 총관리자 화면용 ----
+    async getSetting(key) { const r = await pool.query('SELECT value FROM settings WHERE key = $1', [key]); return r.rows.length ? r.rows[0].value : null; },
+    async setSetting(key, value) { await pool.query('INSERT INTO settings (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = $2', [key, value]); },
+    async delSetting(key) { await pool.query('DELETE FROM settings WHERE key = $1', [key]); },
+    async adminUsers() {
+      const r = await pool.query('SELECT id, username, nickname, rank, floor, money, banned, created_at FROM users ORDER BY id LIMIT 500');
+      return r.rows.map(x => Object.assign(x, { created_at: new Date(x.created_at).getTime() }));
+    },
+    async setRankForce(uid, rank) { return (await pool.query('UPDATE users SET rank = $2 WHERE id = $1', [uid, rank])).rowCount === 1; },
+    async adjustMoney(uid, delta) {
+      const r = await pool.query('UPDATE users SET money = GREATEST(0, money + $2) WHERE id = $1 RETURNING money', [uid, delta]);
+      return r.rows.length ? r.rows[0].money : null;
+    },
+    async setBanned(uid, on) { return (await pool.query('UPDATE users SET banned = $2 WHERE id = $1', [uid, on])).rowCount === 1; },
+    async adminPosts() {
+      const r = await pool.query(
+        `SELECT p.id, p.board, p.title, p.body, p.pinned, p.created_at, u.nickname FROM posts p JOIN users u ON u.id = p.author
+         WHERE NOT p.deleted ORDER BY p.id DESC LIMIT 150`);
+      return r.rows.map(x => ({ id: Number(x.id), board: x.board, title: x.title, body: x.body, pinned: x.pinned, at: new Date(x.created_at).getTime(), nickname: x.nickname }));
+    },
+    async listAudit(action) {
+      const r = await pool.query(
+        `SELECT a.id, a.at, a.action, a.detail, u.nickname FROM audit_log a LEFT JOIN users u ON u.id = a.actor
+         WHERE ($1::text IS NULL OR a.action = $1) ORDER BY a.id DESC LIMIT 200`, [action || null]);
+      return r.rows.map(x => ({ id: Number(x.id), at: new Date(x.at).getTime(), action: x.action, detail: x.detail, nickname: x.nickname }));
+    },
     // 사원 명부 (비밀번호 해시는 꺼내지 않는다)
     async listUsers() {
       const r = await pool.query('SELECT id, username, nickname, rank, floor FROM users WHERE banned = FALSE ORDER BY id LIMIT 300');
@@ -210,7 +237,7 @@ function pgStore() {
 }
 
 function memoryStore() {
-  const users = [], floors = [], log = [], posts = [], furn = [], events = [], entries = [];
+  const users = [], floors = [], log = [], posts = [], furn = [], events = [], entries = [], settings = {};
   let seq = 0, postSeq = 0, furnSeq = 0, eventSeq = 0;
   function row(floor) {
     let f = floors.find(x => x.floor === floor);
@@ -283,9 +310,22 @@ function memoryStore() {
       return { money: u.money, reward: e.reward };
     },
     async loadFurniture() { return furn.map(x => Object.assign({}, x)); },
-    async addFurniture(floor, type, x, z, rot, owner) { furn.push({ id: ++furnSeq, floor, type, x, z, rot, owner }); return furnSeq; },
+    async addFurniture(floor, type, x, z, rot, owner, paid) { furn.push({ id: ++furnSeq, floor, type, x, z, rot, owner, paid }); return furnSeq; },
     async moveFurniture(id, x, z, rot) { const f = furn.find(y => y.id === id); if (f) { f.x = x; f.z = z; f.rot = rot; } },
-    async deleteFurniture(id) { const i = furn.findIndex(y => y.id === id); if (i >= 0) furn.splice(i, 1); },
+    async deleteFurniture(id) { const i = furn.findIndex(y => y.id === id); if (i < 0) return false; furn.splice(i, 1); return true; },
+    async getSetting(key) { return Object.prototype.hasOwnProperty.call(settings, key) ? settings[key] : null; },
+    async setSetting(key, value) { settings[key] = value; },
+    async delSetting(key) { delete settings[key]; },
+    async adminUsers() { return users.map(u => ({ id: u.id, username: u.username, nickname: u.nickname, rank: u.rank, floor: u.floor, money: u.money, banned: u.banned, created_at: u.created_at || 0 })); },
+    async setRankForce(uid, rank) { const u = users.find(x => x.id === uid); if (!u) return false; u.rank = rank; return true; },
+    async adjustMoney(uid, delta) { const u = users.find(x => x.id === uid); if (!u) return null; u.money = Math.max(0, u.money + delta); return u.money; },
+    async setBanned(uid, on) { const u = users.find(x => x.id === uid); if (!u) return false; u.banned = on; return true; },
+    async adminPosts() {
+      return posts.filter(x => !x.deleted).slice(-150).reverse().map(x => ({ id: x.id, board: x.board, title: x.title, body: x.body, pinned: x.pinned, at: x.at, nickname: users.find(v => v.id === x.author).nickname }));
+    },
+    async listAudit(action) {
+      return log.filter(x => !action || x.action === action).slice(-200).reverse().map((x, i) => ({ id: log.length - i, at: x.at || Date.now(), action: x.action, detail: x.detail, nickname: (users.find(u => u.id === x.actor) || {}).nickname || null }));
+    },
     async listUsers() { return users.filter(u => !u.banned).map(u => ({ id: u.id, username: u.username, nickname: u.nickname, rank: u.rank, floor: u.floor })); },
     async setRank(uid, from, to) { const u = users.find(x => x.id === uid); if (!u || u.rank !== from) return false; u.rank = to; return true; },
     async demoteOtherCeos(uid) { const ids = []; users.forEach(u => { if (u.rank === 'ceo' && u.id !== uid) { u.rank = 'manager'; ids.push(u.id); } }); return ids; },

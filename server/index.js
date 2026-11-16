@@ -9,6 +9,7 @@ const db = require('./db');
 const auth = require('./auth');
 const Game = require('./game');
 const weather = require('./weather');
+const admin = require('./admin');
 
 const game = new Game();
 const PUBLIC = path.join(__dirname, '..', 'public');
@@ -22,6 +23,8 @@ const FILES = {
 const fontCache = new Map();          // 글꼴은 크므로 한 번 압축해 두고 다시 쓴다
 const CSP = "default-src 'self'; script-src 'self' https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline'; " +
   "img-src 'self' data: blob:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'";
+// 관리자 화면은 외부 스크립트를 전혀 쓰지 않는다
+const ADMIN_CSP = "default-src 'self'; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'";
 
 const apiLimit = auth.limiter(40, 60 * 1000);            // IP당 1분 40회
 const signupLimit = auth.limiter(5, 60 * 60 * 1000);     // IP당 1시간 가입 5회
@@ -58,6 +61,7 @@ async function signup(req, res, ip) {
   if (!RE_USER.test(username)) return json(res, 400, { ok: false, error: '아이디는 영문 소문자, 숫자, 밑줄로 4~16자여야 합니다.' });
   if (!RE_NICK.test(nickname)) return json(res, 400, { ok: false, error: '닉네임은 한글, 영문, 숫자로 2~10자여야 합니다.' });
   if (password.length < 8 || password.length > 72) return json(res, 400, { ok: false, error: '비밀번호는 8자 이상이어야 합니다.' });
+  if (!game.live.signupOpen) return json(res, 403, { ok: false, error: '지금은 새 가입을 받지 않습니다.' });
   if (!signupLimit.hit(ip)) return json(res, 429, { ok: false, error: '가입 시도가 너무 많습니다. 나중에 다시 시도해 주세요.' });
   const r = await db.createUser(username, nickname, await auth.hashPassword(password), config.maxUsers);
   if (r.error === 'full') return json(res, 403, { ok: false, error: '가입 정원(' + config.maxUsers + '명)이 모두 찼습니다. 더 이상 가입할 수 없습니다.' });
@@ -107,6 +111,14 @@ const server = http.createServer((req, res) => {
     });
     return;
   }
+
+  if (admin.handle(req, res, url, clientIp(req), game, (name, type) => {
+    fs.readFile(path.join(PUBLIC, name), (err, data) => {
+      if (err) { res.writeHead(500); return res.end(); }
+      res.writeHead(200, { 'Content-Type': type, 'Cache-Control': 'no-store', 'Content-Security-Policy': ADMIN_CSP, 'X-Frame-Options': 'DENY' });
+      res.end(data);
+    });
+  })) return;
 
   const file = req.method === 'GET' ? FILES[url] : null;
   if (!file) { res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' }); return res.end('Not found'); }
@@ -176,7 +188,7 @@ setInterval(() => {
   }
 }, 25000).unref();
 
-db.init().then(() => game.init()).then(() => {
+db.init().then(() => admin.start()).then(() => game.init()).then(() => {
   weather.start();
   server.listen(config.port, () => {
     console.log('본사 서버 시작: 포트 ' + config.port + ', 저장소 ' + db.kind);

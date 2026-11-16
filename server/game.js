@@ -34,7 +34,12 @@ class Game {
       this.furn.set(n, []);
     }
     this.postLimit = auth.limiter(3, 60 * 1000);        // 글쓰기: 1분에 3개까지
-    this.lockFail = auth.limiter(5, 10 * 60 * 1000);   // 12층 비밀번호: 10분 동안 5번 틀리면 잠금
+    this.lockFail = auth.limiter(5, 10 * 60 * 1000);
+    // 총관리자가 바꿀 수 있는 설정 (값표, 안내원 대사, 공지, 가입 받기). DB의 settings 에 저장된다.
+    this.live = { prices: {}, npc: { hi: '', guide: [] }, notice: '', signupOpen: true };
+    this.basePrices = {};
+    for (const k of Object.keys(World.FURN)) this.basePrices[k] = World.FURN[k].price;
+    for (const k of Object.keys(World.COSM)) this.basePrices[k] = World.COSM[k].price;   // 12층 비밀번호: 10분 동안 5번 틀리면 잠금
     this.ticks = 0; this.lastOnline = 0;
     this.timer = setInterval(() => this.tick(), TICK_MS);
     this.timer.unref();
@@ -50,6 +55,10 @@ class Game {
     const d = await db.loadFloors();
     d.floors.forEach(r => { const f = this.floors.get(r.floor); if (f) { f.name = r.name || ''; f.hash = r.pass_hash || null; } });
     d.counts.forEach(r => { const f = this.floors.get(r.floor); if (f) f.count = r.n; });
+    try {
+      const saved = JSON.parse((await db.getSetting('live')) || '{}');
+      if (saved && typeof saved === 'object') this.setLive(saved, true);
+    } catch (e) { console.warn('저장된 설정을 읽지 못해 기본값을 씁니다:', e.message); }
     (await db.loadFurniture()).forEach(x => { if (this.furn.has(x.floor) && World.FURN[x.type]) this.furn.get(x.floor).push(x); });
     for (const n of this.furn.keys()) this.rebuildCol(n);
     (await db.listPinned()).forEach(x => { if (!this.pins.has(x.board)) this.pins.set(x.board, []); this.pins.get(x.board).push(x); });
@@ -110,7 +119,7 @@ class Game {
     this.players.set(p.id, p);
     this.rooms[p.area].add(p);
     this.send(ws, { t: 'hello', id: p.id, me: { n: p.name, r: p.rank, area: p.area, x: p.x, z: p.z, floor: p.floor, money: p.money, c: p.color || '', h: p.hat || '' },
-      floors: this.floorList(), pins: this.areaPins(p.area),
+      floors: this.floorList(), pins: this.areaPins(p.area), cfg: this.liveForClient(),
       players: this.roster(p.area, p), online: this.players.size,
       now: Date.now(), wx: weather.get() });
     this.broadcast(p.area, { t: 'join', p: this.pub(p) }, p);
@@ -232,6 +241,56 @@ class Game {
     }
     this.moveTo(p, World.areaOf(to), World.ELEV_OUT.x + (Math.random() - 0.5), World.ELEV_OUT.z, 0);
   }
+
+  // ---- 총관리자 화면에서 부르는 것들 (권한 확인은 admin.js 가 끝낸 뒤에만 불린다) ----
+  liveForClient() { return { prices: this.live.prices, npc: this.live.npc, notice: this.live.notice }; }
+  // 설정을 검사해서 적용한다. 값표는 서버가 가진 가구·치장 표에 바로 반영된다.
+  setLive(next, quiet) {
+    const L = this.live;
+    if (next.prices && typeof next.prices === 'object') {
+      for (const k of Object.keys(this.basePrices)) {
+        const v = Number(next.prices[k]);
+        if (Number.isInteger(v) && v >= 0 && v <= 100000) L.prices[k] = v;
+      }
+    }
+    if (next.npc && typeof next.npc === 'object') {
+      const clean = (t, n) => String(t || '').replace(/[\u0000-\u001f\u007f]/g, ' ').trim().slice(0, n);
+      L.npc = { hi: clean(next.npc.hi, 60), guide: (Array.isArray(next.npc.guide) ? next.npc.guide : []).map(x => clean(x, 200)).filter(Boolean).slice(0, 12) };
+    }
+    if (typeof next.notice === 'string') L.notice = next.notice.replace(/[\u0000-\u001f\u007f]/g, ' ').trim().slice(0, 200);
+    if (typeof next.signupOpen === 'boolean') L.signupOpen = next.signupOpen;
+    for (const k of Object.keys(this.basePrices)) {
+      const price = Object.prototype.hasOwnProperty.call(L.prices, k) ? L.prices[k] : this.basePrices[k];
+      (World.FURN[k] || World.COSM[k]).price = price;
+    }
+    if (!quiet) this.broadcastAll({ t: 'cfg', cfg: this.liveForClient() });
+  }
+  async saveLive() { await db.setSetting('live', JSON.stringify(this.live)); }
+  async adminRank(uid, rank) {
+    if (!RANK_ORDER.includes(rank) || !(await db.setRankForce(uid, rank))) return false;
+    this.applyRank(uid, rank, '관리자가 직급을 ' + RANK_KO[rank] + '(으)로 바꿨습니다.');
+    if (rank === 'ceo') for (const old of await db.demoteOtherCeos(uid)) this.applyRank(old, 'manager', '새 사장이 임명되어 부장이 되었습니다.');
+    return true;
+  }
+  adminMoney(uid, money, note) { const q = this.players.get(uid); if (q) { this.setMoney(q, money); if (note) this.toast(q, note); } }
+  adminKick(uid) {
+    const q = this.players.get(uid);
+    if (!q) return;
+    this.send(q.ws, { t: 'authfail', m: '이용이 정지된 계정입니다.' });
+    q.ws.close(4004);
+  }
+  async adminFloorName(floor, name) {
+    const f = this.floors.get(floor);
+    if (!f || !RE_FLOOR_NAME.test(name)) return false;
+    await db.setFloorName(floor, name); f.name = name;
+    this.broadcastAll({ t: 'floors', floors: this.floorList() });
+    return true;
+  }
+  async adminUnlock12() {
+    await db.setFloorPass(12, null); this.floors.get(12).hash = null;
+    this.broadcastAll({ t: 'floors', floors: this.floorList() });
+  }
+  onlineIds() { return Array.from(this.players.keys()); }
 
   // ---- 돈, 상점, 치장 ----
   cosm(key, slot) { return typeof key === 'string' && Object.prototype.hasOwnProperty.call(World.COSM, key) && World.COSM[key].slot === slot ? key : null; }
@@ -379,11 +438,21 @@ class Game {
       const it = list.find(x => x.id === Number(m.id));
       if (!it) return;
       if (this.seated(area, it.id)) return this.toast(p, '누가 앉아 있어서 치울 수 없습니다.');
-      await db.deleteFurniture(it.id);
+      const gone = await db.deleteFurniture(it.id);
       const i = list.indexOf(it);
       if (i >= 0) list.splice(i, 1);
       this.rebuildCol(floor);
-      return this.broadcast(area, { t: 'furn', op: 'del', id: it.id });
+      this.broadcast(area, { t: 'furn', op: 'del', id: it.id });
+      // 치우면 놓을 때 낸 값을 놓은 사람에게 돌려준다
+      if (gone && it.paid > 0 && it.owner) {
+        const money = await db.refund(it.owner, it.paid);
+        await db.audit(p.id, 'money', '가구 ' + it.type + ' 환불 +' + it.paid + ' -> ' + it.owner);
+        const q = this.players.get(it.owner);
+        if (q) this.setMoney(q, money);
+        if (this.alive(p)) this.toast(p, it.owner === p.id ? it.paid + '코인을 돌려받았습니다.' : '치웠습니다. ' + it.paid + '코인은 놓은 사람에게 돌려주었습니다.');
+        else if (q && q !== p) this.toast(q, '내가 놓은 ' + World.FURN[it.type].n + '이(가) 치워져 ' + it.paid + '코인을 돌려받았습니다.');
+      }
+      return;
     }
     if (m.op !== 'add' && m.op !== 'mv') return;
     const old = m.op === 'mv' ? list.find(x => x.id === Number(m.id)) : null;
@@ -404,11 +473,11 @@ class Game {
       // 새로 놓을 때 값을 치른다. 돈이 모자라면 놓이지 않고, 저장에 실패하면 돌려준다.
       const price = World.FURN[type].price, left = await db.spend(p.id, price);
       if (left === null) return this.alive(p) && this.toast(p, '코인이 모자랍니다. ' + World.FURN[type].n + '은(는) ' + price + '코인입니다.');
-      try { it.id = await db.addFurniture(floor, type, it.x, it.z, it.rot, p.id); }
+      try { it.id = await db.addFurniture(floor, type, it.x, it.z, it.rot, p.id, price); }
       catch (e) { this.setMoney(p, await db.refund(p.id, price)); throw e; }
       await db.audit(p.id, 'money', '가구 ' + type + ' -' + price);
       this.setMoney(p, left);
-      it.floor = floor;
+      it.floor = floor; it.owner = p.id; it.paid = price;
       list.push(it);
     }
     this.rebuildCol(floor);
