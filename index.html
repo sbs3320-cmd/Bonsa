@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>본사</title>
+<style>
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    margin: 0; height: 100%; overflow: hidden; background: #1c2430;
+    font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", sans-serif;
+    touch-action: none; overscroll-behavior: none;
+    -webkit-user-select: none; user-select: none;
+  }
+  #game { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+  #top {
+    position: fixed; top: 10px; left: 10px; right: 10px; display: flex;
+    justify-content: space-between; align-items: center; pointer-events: none;
+  }
+  .chip {
+    background: rgba(20, 28, 40, .72); color: #fff; padding: 7px 13px;
+    border-radius: 999px; font-size: 14px; font-weight: 600;
+  }
+  .chip.sub { font-weight: 500; font-size: 12px; opacity: .9; }
+  #stick {
+    position: fixed; left: 22px; bottom: 26px; width: 128px; height: 128px;
+    border-radius: 50%; background: rgba(255,255,255,.16);
+    border: 2px solid rgba(255,255,255,.4);
+  }
+  #knob {
+    position: absolute; left: 50%; top: 50%; width: 56px; height: 56px;
+    margin: -28px 0 0 -28px; border-radius: 50%;
+    background: rgba(255,255,255,.82); box-shadow: 0 2px 8px rgba(0,0,0,.3);
+  }
+  #act {
+    position: fixed; right: 22px; bottom: 44px; min-width: 96px; min-height: 64px;
+    padding: 0 20px; border: 0; border-radius: 32px; background: #2f6fed; color: #fff;
+    font-size: 17px; font-weight: 700; font-family: inherit;
+    box-shadow: 0 4px 14px rgba(0,0,0,.35); display: none;
+  }
+  #act:active { background: #2458c4; }
+  #toast {
+    position: fixed; left: 50%; top: 62px; transform: translateX(-50%);
+    background: rgba(20,28,40,.86); color: #fff; padding: 10px 16px; border-radius: 12px;
+    font-size: 14px; max-width: 86vw; text-align: center; opacity: 0;
+    transition: opacity .25s; pointer-events: none;
+  }
+  #toast.on { opacity: 1; }
+  #fade {
+    position: fixed; inset: 0; background: #000; opacity: 0;
+    transition: opacity .25s; pointer-events: none;
+  }
+  #fade.on { opacity: 1; }
+  #dialog {
+    position: fixed; left: 12px; right: 12px; bottom: 16px; margin: 0 auto; max-width: 560px;
+    background: #fff; border-radius: 18px; padding: 16px 16px 14px;
+    box-shadow: 0 8px 30px rgba(0,0,0,.4); display: none;
+  }
+  #dialog .who { font-size: 13px; font-weight: 700; color: #2f6fed; margin-bottom: 6px; }
+  #dialog .txt { font-size: 16px; line-height: 1.55; color: #1c2430; min-height: 50px; }
+  #dialog .row { display: flex; justify-content: space-between; align-items: center; margin-top: 12px; }
+  #dialog .step { font-size: 12px; color: #7a8494; }
+  .btn {
+    border: 0; border-radius: 12px; background: #2f6fed; color: #fff; font-family: inherit;
+    font-size: 16px; font-weight: 700; padding: 12px 22px; min-height: 48px;
+  }
+  .btn.ghost { background: #e8ecf3; color: #1c2430; }
+  #board {
+    position: fixed; inset: 0; background: rgba(10,14,22,.6); display: none;
+    align-items: center; justify-content: center; padding: 16px;
+  }
+  #board .card {
+    width: 100%; max-width: 520px; max-height: 82vh; overflow: auto; background: #fff;
+    border-radius: 18px; padding: 18px; touch-action: pan-y;
+  }
+  #board h2 { margin: 0 0 4px; font-size: 19px; color: #1c2430; }
+  #board .note { font-size: 12px; color: #7a8494; margin-bottom: 12px; }
+  .post { border-top: 1px solid #e8ecf3; padding: 12px 0; }
+  .post .t { font-size: 15px; font-weight: 700; color: #1c2430; }
+  .post .m { font-size: 12px; color: #7a8494; margin: 3px 0 6px; }
+  .post .b { font-size: 14px; line-height: 1.5; color: #333c4a; }
+  #hint {
+    position: fixed; left: 50%; top: 38%; transform: translate(-50%, -50%);
+    background: rgba(20,28,40,.88); color: #fff; border-radius: 16px; padding: 16px 20px;
+    font-size: 15px; line-height: 1.7; text-align: center; width: max-content; max-width: 86vw;
+    pointer-events: none; transition: opacity .4s;
+  }
+  #err { position: fixed; inset: 0; display: none; align-items: center; justify-content: center;
+    color: #fff; padding: 24px; text-align: center; font-size: 15px; line-height: 1.6; }
+
+  input { -webkit-user-select: text; user-select: text; font-family: inherit; }
+  #auth { position: fixed; inset: 0; background: rgba(10,14,22,.72); display: flex;
+    align-items: center; justify-content: center; padding: 16px; }
+  #auth .card { width: 100%; max-width: 380px; background: #fff; border-radius: 20px; padding: 22px; }
+  #auth h1 { margin: 0 0 14px; font-size: 26px; color: #2f6fed; text-align: center; }
+  .tabs { display: flex; gap: 8px; margin-bottom: 14px; }
+  .tabs button { flex: 1; min-height: 44px; border: 0; border-radius: 10px; background: #e8ecf3;
+    color: #1c2430; font-size: 15px; font-weight: 700; font-family: inherit; }
+  .tabs button.on { background: #1c2430; color: #fff; }
+  #auth label { display: block; font-size: 12px; color: #5b6676; margin: 10px 0 4px; }
+  #auth input { width: 100%; min-height: 48px; border: 1.5px solid #cfd6e1; border-radius: 10px;
+    padding: 0 12px; font-size: 16px; color: #1c2430; }
+  #authMsg { min-height: 20px; margin: 10px 0; font-size: 13px; color: #c73a3a; }
+  #authGo { width: 100%; }
+  #chatLog { position: fixed; left: 10px; top: 52px; width: min(72vw, 340px); pointer-events: none;
+    display: flex; flex-direction: column; gap: 3px; }
+  #chatLog div { background: rgba(20,28,40,.6); color: #fff; font-size: 13px; line-height: 1.4;
+    padding: 4px 9px; border-radius: 9px; width: fit-content; max-width: 100%; word-break: break-all; }
+  #chatLog div.sys { background: rgba(160,60,40,.75); }
+  #chatBtn { position: fixed; left: 50%; bottom: 30px; transform: translateX(-50%); min-width: 84px;
+    min-height: 48px; border: 0; border-radius: 24px; background: rgba(20,28,40,.78); color: #fff;
+    font-size: 15px; font-weight: 700; font-family: inherit; }
+  #chatBar { position: fixed; left: 10px; right: 10px; bottom: 12px; display: none; gap: 8px; }
+  #chatBar input { flex: 1; min-width: 0; min-height: 48px; border: 0; border-radius: 12px; padding: 0 14px; font-size: 16px; }
+  #net { display: none; background: rgba(160,60,40,.85); }
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+
+<div id="top">
+  <div class="chip" id="place">야외</div>
+  <div class="chip sub" id="net">재접속 중…</div>
+  <div class="chip sub" id="count">접속 0명</div>
+</div>
+<div id="chatLog"></div>
+<div id="stick"><div id="knob"></div></div>
+<button id="act" type="button"></button>
+<button id="chatBtn" type="button">채팅</button>
+<form id="chatBar" autocomplete="off">
+  <input id="chatIn" maxlength="120" placeholder="메시지 입력" enterkeyhint="send">
+  <button class="btn" type="submit">전송</button>
+</form>
+<div id="toast"></div>
+
+<div id="dialog">
+  <div class="who" id="dWho"></div>
+  <div class="txt" id="dTxt"></div>
+  <div class="row">
+    <span class="step" id="dStep"></span>
+    <button class="btn" id="dNext" type="button">다음</button>
+  </div>
+</div>
+
+<div id="board">
+  <div class="card">
+    <h2>전체 게시판</h2>
+    <div class="note">누구나 읽을 수 있습니다. 글쓰기는 사장·부장만 가능하며 5단계에서 추가됩니다.</div>
+    <div id="posts"></div>
+    <div style="text-align:right;margin-top:8px">
+      <button class="btn ghost" id="bClose" type="button">닫기</button>
+    </div>
+  </div>
+</div>
+
+<div id="fade"></div>
+
+<div id="auth">
+  <div class="card">
+    <h1>본사</h1>
+    <div class="tabs">
+      <button type="button" id="tabLogin" class="on">로그인</button>
+      <button type="button" id="tabJoin">회원가입</button>
+    </div>
+    <form id="authForm">
+      <label for="fUser">아이디 (영문 소문자·숫자 4~16자)</label>
+      <input id="fUser" autocomplete="username" autocapitalize="off" spellcheck="false" maxlength="16">
+      <div id="nickRow" style="display:none">
+        <label for="fNick">닉네임 (한글·영문·숫자 2~10자)</label>
+        <input id="fNick" maxlength="10">
+      </div>
+      <label for="fPass">비밀번호 (8자 이상)</label>
+      <input id="fPass" type="password" autocomplete="current-password" maxlength="72">
+      <div id="authMsg"></div>
+      <button class="btn" id="authGo" type="submit">로그인</button>
+    </form>
+  </div>
+</div>
+<div id="err">3D 엔진을 불러오지 못했습니다.<br>네트워크 연결을 확인한 뒤 새로고침해 주세요.</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="/world.js"></script>
+<script src="/game.js"></script>
+</body>
+</html>
