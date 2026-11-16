@@ -124,6 +124,16 @@
   .list button.here { background: #2f6fed; color: #fff; }
   .list button.here span { color: #dbe6ff; }
   .list button.mine { box-shadow: inset 0 0 0 2px #2f8f6f; }
+  #decoBar { position: fixed; left: 8px; right: 8px; bottom: 8px; background: rgba(255,255,255,.96); border-radius: 16px;
+    padding: 10px; display: none; box-shadow: 0 6px 24px rgba(0,0,0,.35); }
+  #decoInfo { font-size: 13px; color: #333c4a; margin-bottom: 8px; line-height: 1.4; }
+  #decoTypes { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 6px; touch-action: pan-x; }
+  #decoTypes button, #decoTools button { flex: none; min-height: 44px; padding: 0 14px; border: 0; border-radius: 10px;
+    background: #e8ecf3; color: #1c2430; font-family: inherit; font-size: 14px; font-weight: 700; }
+  #decoTypes button.on, #decoTools button.on { background: #2f6fed; color: #fff; }
+  #decoTools { display: flex; gap: 6px; margin-top: 4px; }
+  #decoTools button { flex: 1; padding: 0 6px; }
+  #decoTools button:disabled { opacity: .4; }
   #hint {
     position: fixed; left: 50%; top: 38%; transform: translate(-50%, -50%);
     background: rgba(20,28,40,.88); color: #fff; border-radius: 16px; padding: 16px 20px;
@@ -183,6 +193,16 @@
   <input id="chatIn" maxlength="120" placeholder="메시지 입력" enterkeyhint="send">
   <button class="btn" type="submit">전송</button>
 </form>
+<div id="decoBar">
+  <div id="decoInfo"></div>
+  <div id="decoTypes"></div>
+  <div id="decoTools">
+    <button type="button" id="dcRot">회전</button>
+    <button type="button" id="dcDel">삭제</button>
+    <button type="button" id="dcNone">선택 해제</button>
+    <button type="button" id="dcDone" class="on">완료</button>
+  </div>
+</div>
 <div id="toast"></div>
 
 <div id="dialog">

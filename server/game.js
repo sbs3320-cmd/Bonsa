@@ -16,6 +16,7 @@ const RANK_ORDER = ['intern', 'staff', 'deputy', 'lead', 'manager', 'ceo'];
 const RANK_KO = { intern: '인턴', staff: '사원', deputy: '부팀장', lead: '팀장', manager: '부장', ceo: '사장', owner: '총관리자' };
 const level = rank => rank === 'owner' ? RANK_ORDER.length : RANK_ORDER.indexOf(rank);
 const rankOf = user => config.superAdmin && user.username === config.superAdmin ? 'owner' : user.rank;
+const DECO_MAX = 40, DECO_WINDOW_MS = 10000;   // 꾸미기 요청 횟수 제한
 const POST_TITLE = 40, POST_BODY = 500;
 const RE_FLOOR_NAME = /^[가-힣a-zA-Z0-9 ]{0,12}$/;
 
@@ -23,11 +24,14 @@ class Game {
   constructor() {
     this.players = new Map();                       // uid -> player
     this.rooms = { out: new Set(), in: new Set() };
+    this.furn = new Map();                          // 층 번호 -> 가구 목록
+    this.furnCol = {};                              // 장소 -> 가구 충돌 영역 (이동 검사에 쓴다)
     this.pins = new Map();                          // 게시판 번호 -> 고정한 글 목록
     this.floors = new Map();                        // 층 번호 -> { name, count, hash }
     for (let n = World.FLOOR_MIN; n <= World.FLOOR_MAX; n++) {
       this.rooms['f' + n] = new Set();
       this.floors.set(n, { name: '', count: 0, hash: null });
+      this.furn.set(n, []);
     }
     this.postLimit = auth.limiter(3, 60 * 1000);        // 글쓰기: 1분에 3개까지
     this.lockFail = auth.limiter(5, 10 * 60 * 1000);   // 12층 비밀번호: 10분 동안 5번 틀리면 잠금
@@ -46,6 +50,8 @@ class Game {
     const d = await db.loadFloors();
     d.floors.forEach(r => { const f = this.floors.get(r.floor); if (f) { f.name = r.name || ''; f.hash = r.pass_hash || null; } });
     d.counts.forEach(r => { const f = this.floors.get(r.floor); if (f) f.count = r.n; });
+    (await db.loadFurniture()).forEach(x => { if (this.furn.has(x.floor) && World.FURN[x.type]) this.furn.get(x.floor).push(x); });
+    for (const n of this.furn.keys()) this.rebuildCol(n);
     (await db.listPinned()).forEach(x => { if (!this.pins.has(x.board)) this.pins.set(x.board, []); this.pins.get(x.board).push(x); });
   }
   floorList() {
@@ -73,7 +79,7 @@ class Game {
     const msg = JSON.stringify(obj);
     for (const p of this.rooms[area]) if (p !== except && p.ws.readyState === 1) p.ws.send(msg);
   }
-  pub(p) { return { id: p.id, n: p.name, r: p.rank, x: p.x, z: p.z, f: p.f, u: p.umb ? 1 : 0 }; }
+  pub(p) { return { id: p.id, n: p.name, r: p.rank, x: p.x, z: p.z, f: p.f, u: p.umb ? 1 : 0, s: p.sit ? 1 : 0 }; }
   roster(area, except) {
     const list = [];
     for (const p of this.rooms[area]) if (p !== except) list.push(this.pub(p));
@@ -98,7 +104,7 @@ class Game {
       rank: rankOf(user),
       area: 'out', x: World.SPAWN.start.x + (Math.random() * 4 - 2), z: World.SPAWN.start.z + Math.random() * 2,
       f: Math.PI, dirty: false, lastMove: Date.now(), moveSec: 0, moveCount: 0, chatTimes: [],
-      umb: false, lastUmb: 0, floor: user.floor || null, actTimes: [], busy: false, unlocked12: false
+      umb: false, lastUmb: 0, sit: null, sitFrom: null, lastSit: 0, decoTimes: [], floor: user.floor || null, actTimes: [], busy: false, unlocked12: false
     };
     this.players.set(p.id, p);
     this.rooms[p.area].add(p);
@@ -125,16 +131,18 @@ class Game {
     else if (m.t === 'chat') this.onChat(p, m);
     else if (m.t === 'area') this.onArea(p, m);
     else if (m.t === 'umb') this.onUmbrella(p, m);
+    else if (m.t === 'sit') this.onSit(p, m);
+    else if (m.t === 'stand') this.onStand(p);
     else if (m.t === 'elev' || m.t === 'freg' || m.t === 'fname' || m.t === 'fpass' || m.t === 'who' || m.t === 'roster' || m.t === 'setrank'
-      || m.t === 'posts' || m.t === 'post' || m.t === 'delpost' || m.t === 'editpost' || m.t === 'pin') {
+      || m.t === 'posts' || m.t === 'post' || m.t === 'delpost' || m.t === 'editpost' || m.t === 'pin' || m.t === 'deco') {
       // DB를 쓰는 요청은 한 사람당 한 번에 하나씩만 처리한다
-      if (p.busy || !this.actOk(p)) return;
+      if (p.busy || !(m.t === 'deco' ? this.decoOk(p) : this.actOk(p))) return;
       p.busy = true;
       const run = m.t === 'elev' ? this.onElev(p, m) : m.t === 'freg' ? this.onFloorReg(p, m)
         : m.t === 'fname' ? this.onFloorName(p, m) : m.t === 'fpass' ? this.onFloorPass(p, m)
         : m.t === 'who' ? this.onWho(p, m) : m.t === 'roster' ? this.onRoster(p) : m.t === 'setrank' ? this.onSetRank(p, m)
         : m.t === 'posts' ? this.sendPosts(p, m) : m.t === 'post' ? this.onPost(p, m) : m.t === 'delpost' ? this.onDelPost(p, m)
-        : m.t === 'editpost' ? this.onEditPost(p, m) : this.onPin(p, m);
+        : m.t === 'editpost' ? this.onEditPost(p, m) : m.t === 'pin' ? this.onPin(p, m) : this.onDeco(p, m);
       run.catch(e => { console.error(e); if (this.alive(p)) this.toast(p, '요청을 처리하지 못했습니다.'); })
         .then(() => { p.busy = false; });
     }
@@ -147,11 +155,12 @@ class Game {
     if (++p.moveCount > MAX_MOVES_PER_SEC) return;
     const x = Number(m.x), z = Number(m.z), f = Number(m.f);
     if (!Number.isFinite(x) || !Number.isFinite(z) || !Number.isFinite(f)) return;
+    if (p.sit) return;                                // 앉아 있는 동안은 움직이지 않는다 (먼저 일어서야 한다)
 
     const elapsed = Math.min(1, (now - p.lastMove) / 1000);
     const allowed = World.SPEED * elapsed * 1.35 + 0.5;
     const dist = Math.hypot(x - p.x, z - p.z);
-    if (dist > allowed || World.blocked(p.area, x, z)) {
+    if (dist > allowed || World.blocked(p.area, x, z, this.furnCol[p.area])) {
       // 순간이동이나 벽 통과: 받아들이지 않고 서버가 아는 위치로 되돌린다
       this.send(p.ws, { t: 'fix', x: p.x, z: p.z });
       return;
@@ -191,10 +200,11 @@ class Game {
   moveTo(p, to, x, z, f) {
     this.rooms[p.area].delete(p);
     this.broadcast(p.area, { t: 'leave', id: p.id });
-    p.area = to; p.x = x; p.z = z; p.f = f;
+    p.area = to; p.x = x; p.z = z; p.f = f; p.sit = null; p.sitFrom = null;
     p.lastMove = Date.now(); p.dirty = false;
     this.rooms[to].add(p);
-    this.send(p.ws, { t: 'area', area: to, x: p.x, z: p.z, f: p.f, players: this.roster(to, p), pins: this.areaPins(to) });
+    this.send(p.ws, { t: 'area', area: to, x: p.x, z: p.z, f: p.f, players: this.roster(to, p), pins: this.areaPins(to),
+      furn: this.furnList(to) });
     this.broadcast(to, { t: 'join', p: this.pub(p) }, p);
   }
 
@@ -215,6 +225,105 @@ class Game {
       if (!World.nearElev(p.area, p.x, p.z, 0.8)) return;      // 확인하는 사이 자리를 떴으면 태우지 않는다
     }
     this.moveTo(p, World.areaOf(to), World.ELEV_OUT.x + (Math.random() - 0.5), World.ELEV_OUT.z, 0);
+  }
+
+  // ---- 꾸미기 ----
+  furnList(area) { return (this.furn.get(World.floorOf(area)) || []).map(x => [x.id, x.type, x.x, x.z, x.rot]); }
+  rebuildCol(floor) {
+    this.furnCol[World.areaOf(floor)] = this.furn.get(floor).filter(x => World.FURN[x.type].solid).map(World.furnRect);
+  }
+  // 꾸밀 수 있는 사람: 2~11층은 그 층에 등록한 사원(과 총관리자), 12층은 사장과 총관리자
+  canDeco(p, floor) {
+    if (floor === 12) return this.isTop(p);
+    return floor >= World.FLOOR_MIN && (p.floor === floor || p.rank === 'owner');
+  }
+  decoOk(p) {
+    const now = Date.now();
+    p.decoTimes = p.decoTimes.filter(t => now - t < DECO_WINDOW_MS);
+    if (p.decoTimes.length >= DECO_MAX) { this.toast(p, '꾸미기 요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.'); return false; }
+    p.decoTimes.push(now);
+    return true;
+  }
+  // 그 자리에 사람이 서 있으면 가구에 갇히므로 놓지 못하게 한다
+  someoneIn(area, rect) {
+    for (const q of this.rooms[area]) {
+      if (q.sit) continue;
+      if (q.x > rect.x0 - World.R && q.x < rect.x1 + World.R && q.z > rect.z0 - World.R && q.z < rect.z1 + World.R) return true;
+    }
+    return false;
+  }
+  seated(area, id) { for (const q of this.rooms[area]) if (q.sit && q.sit.id === id) return true; return false; }
+  async onDeco(p, m) {
+    const floor = World.floorOf(p.area), area = p.area;
+    if (floor < World.FLOOR_MIN) return;
+    if (!this.canDeco(p, floor)) return this.toast(p, floor === 12 ? '사장실은 사장만 꾸밀 수 있습니다.' : '이 층에 등록한 사원만 꾸밀 수 있습니다.');
+    if (p.sit) return this.toast(p, '먼저 자리에서 일어나 주세요.');
+    const list = this.furn.get(floor);
+    if (m.op === 'del') {
+      const it = list.find(x => x.id === Number(m.id));
+      if (!it) return;
+      if (this.seated(area, it.id)) return this.toast(p, '누가 앉아 있어서 치울 수 없습니다.');
+      await db.deleteFurniture(it.id);
+      const i = list.indexOf(it);
+      if (i >= 0) list.splice(i, 1);
+      this.rebuildCol(floor);
+      return this.broadcast(area, { t: 'furn', op: 'del', id: it.id });
+    }
+    if (m.op !== 'add' && m.op !== 'mv') return;
+    const old = m.op === 'mv' ? list.find(x => x.id === Number(m.id)) : null;
+    if (m.op === 'mv' && !old) return;
+    const type = old ? old.type : m.type, rot = Number(m.rot);
+    if (typeof type !== 'string' || !Object.prototype.hasOwnProperty.call(World.FURN, type)) return;
+    if (!Number.isInteger(rot) || rot < 0 || rot > 3 || !Number.isFinite(Number(m.x)) || !Number.isFinite(Number(m.z))) return;
+    if (!old && list.length >= World.FURN_CAP) return this.toast(p, '이 층에는 가구를 ' + World.FURN_CAP + '개까지만 놓을 수 있습니다.');
+    if (old && this.seated(area, old.id)) return this.toast(p, '누가 앉아 있어서 옮길 수 없습니다.');
+    const size = World.furnSize(type, rot);                 // 좌표는 서버가 다시 격자에 맞춘다
+    const it = { id: old ? old.id : 0, type, rot, x: World.snap(Math.max(-20, Math.min(20, Number(m.x))), size.w), z: World.snap(Math.max(-20, Math.min(20, Number(m.z))), size.d) };
+    if (!World.furnOk(floor, it, list)) return this.toast(p, '그 자리에는 놓을 수 없습니다.');
+    if (World.FURN[type].solid && this.someoneIn(area, World.furnRect(it))) return this.toast(p, '사람이 서 있는 자리에는 놓을 수 없습니다.');
+    if (old) {
+      await db.moveFurniture(old.id, it.x, it.z, it.rot);
+      old.x = it.x; old.z = it.z; old.rot = it.rot;
+    } else {
+      it.id = await db.addFurniture(floor, type, it.x, it.z, it.rot, p.id);
+      it.floor = floor;
+      list.push(it);
+    }
+    this.rebuildCol(floor);
+    this.broadcast(area, { t: 'furn', op: old ? 'mv' : 'add', it: [it.id, type, it.x, it.z, it.rot] });
+  }
+
+  // 앉기: 의자나 소파 가까이에서, 빈 자리에만
+  onSit(p, m) {
+    const now = Date.now(), floor = World.floorOf(p.area);
+    if (now - p.lastSit < 400 || p.sit || floor < World.FLOOR_MIN) return;
+    p.lastSit = now;
+    const it = this.furn.get(floor).find(x => x.id === Number(m.id)), slot = Number(m.slot);
+    const pos = it && Number.isInteger(slot) ? World.seatPos(it, slot) : null;
+    if (!pos) return;
+    if (Math.hypot(pos.x - p.x, pos.z - p.z) > 2.6) return this.toast(p, '조금 더 가까이 가서 앉아 주세요.');
+    for (const q of this.rooms[p.area]) if (q.sit && q.sit.id === it.id && q.sit.slot === slot) return this.toast(p, '이미 다른 사람이 앉아 있습니다.');
+    p.sit = { id: it.id, slot }; p.sitFrom = { x: p.x, z: p.z };
+    p.x = pos.x; p.z = pos.z; p.f = pos.f; p.dirty = false;
+    this.broadcast(p.area, { t: 'sit', id: p.id, s: 1, x: p.x, z: p.z, f: p.f });
+  }
+  onStand(p) {
+    const now = Date.now();
+    if (!p.sit || now - p.lastSit < 400) return;
+    p.lastSit = now;
+    const col = this.furnCol[p.area], free = (x, z) => !World.blocked(p.area, x, z, col);
+    let spot = p.sitFrom && free(p.sitFrom.x, p.sitFrom.z) ? p.sitFrom : null;
+    // 앉기 전 자리가 그 사이 막혔으면 주변에서 빈 곳을 찾는다
+    for (let r = 1; !spot && r <= 4; r += 0.5) {
+      for (let a = 0; a < 8 && !spot; a++) {
+        const x = p.x + Math.cos(a * Math.PI / 4) * r, z = p.z + Math.sin(a * Math.PI / 4) * r;
+        if (free(x, z)) spot = { x, z };
+      }
+    }
+    if (!spot) spot = { x: World.ELEV_OUT.x, z: World.ELEV_OUT.z };
+    p.sit = null; p.sitFrom = null;
+    p.x = spot.x; p.z = spot.z; p.lastMove = now; p.dirty = false;
+    this.broadcast(p.area, { t: 'sit', id: p.id, s: 0, x: p.x, z: p.z, f: p.f });
   }
 
   // ---- 게시판 ----

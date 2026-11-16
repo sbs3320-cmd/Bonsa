@@ -40,3 +40,15 @@ CREATE INDEX IF NOT EXISTS posts_board_idx ON posts (board, id DESC) WHERE NOT d
 -- 게시판 개편: 고정한 글만 게시판에 종이로 붙는다. 수정 시각도 남긴다.
 ALTER TABLE posts ADD COLUMN IF NOT EXISTS pinned BOOLEAN NOT NULL DEFAULT FALSE;
 ALTER TABLE posts ADD COLUMN IF NOT EXISTS edited_at TIMESTAMPTZ;
+
+-- 6단계: 꾸미기. 층마다 놓인 가구 (위치는 격자에 맞춘 값, rot 은 90도 단위 0~3)
+CREATE TABLE IF NOT EXISTS furniture (
+  id      BIGSERIAL PRIMARY KEY,
+  floor   INTEGER NOT NULL,
+  type    TEXT NOT NULL,
+  x       REAL NOT NULL,
+  z       REAL NOT NULL,
+  rot     INTEGER NOT NULL DEFAULT 0,
+  owner   INTEGER REFERENCES users(id)
+);
+CREATE INDEX IF NOT EXISTS furniture_floor_idx ON furniture (floor);

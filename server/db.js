@@ -71,6 +71,17 @@ function pgStore() {
       return r.rowCount === 1;
     },
     async unpinPost(id) { await pool.query('UPDATE posts SET pinned = FALSE WHERE id = $1', [id]); },
+    // 가구
+    async loadFurniture() {
+      const r = await pool.query('SELECT id, floor, type, x, z, rot FROM furniture ORDER BY id');
+      return r.rows.map(x => ({ id: Number(x.id), floor: x.floor, type: x.type, x: Number(x.x), z: Number(x.z), rot: x.rot }));
+    },
+    async addFurniture(floor, type, x, z, rot, owner) {
+      const r = await pool.query('INSERT INTO furniture (floor, type, x, z, rot, owner) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id', [floor, type, x, z, rot, owner]);
+      return Number(r.rows[0].id);
+    },
+    async moveFurniture(id, x, z, rot) { await pool.query('UPDATE furniture SET x = $2, z = $3, rot = $4 WHERE id = $1', [id, x, z, rot]); },
+    async deleteFurniture(id) { await pool.query('DELETE FROM furniture WHERE id = $1', [id]); },
     // 사원 명부 (비밀번호 해시는 꺼내지 않는다)
     async listUsers() {
       const r = await pool.query('SELECT id, username, nickname, rank, floor FROM users WHERE banned = FALSE ORDER BY id LIMIT 300');
@@ -123,8 +134,8 @@ function pgStore() {
 }
 
 function memoryStore() {
-  const users = [], floors = [], log = [], posts = [];
-  let seq = 0, postSeq = 0;
+  const users = [], floors = [], log = [], posts = [], furn = [];
+  let seq = 0, postSeq = 0, furnSeq = 0;
   function row(floor) {
     let f = floors.find(x => x.floor === floor);
     if (!f) { f = { floor, name: '', pass_hash: null }; floors.push(f); }
@@ -164,6 +175,10 @@ function memoryStore() {
       x.pinned = true; return true;
     },
     async unpinPost(id) { const x = posts.find(y => y.id === id); if (x) x.pinned = false; },
+    async loadFurniture() { return furn.map(x => Object.assign({}, x)); },
+    async addFurniture(floor, type, x, z, rot, owner) { furn.push({ id: ++furnSeq, floor, type, x, z, rot, owner }); return furnSeq; },
+    async moveFurniture(id, x, z, rot) { const f = furn.find(y => y.id === id); if (f) { f.x = x; f.z = z; f.rot = rot; } },
+    async deleteFurniture(id) { const i = furn.findIndex(y => y.id === id); if (i >= 0) furn.splice(i, 1); },
     async listUsers() { return users.filter(u => !u.banned).map(u => ({ id: u.id, username: u.username, nickname: u.nickname, rank: u.rank, floor: u.floor })); },
     async setRank(uid, from, to) { const u = users.find(x => x.id === uid); if (!u || u.rank !== from) return false; u.rank = to; return true; },
     async demoteOtherCeos(uid) { const ids = []; users.forEach(u => { if (u.rank === 'ceo' && u.id !== uid) { u.rank = 'manager'; ids.push(u.id); } }); return ids; },

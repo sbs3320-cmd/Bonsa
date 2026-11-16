@@ -14,7 +14,7 @@ function bonsaBoot() {
     '엘리베이터: 층 사이는 엘리베이터로만 이동합니다. 타면 층 선택 화면이 뜨고, 이름이 등록된 층은 그 이름으로 보입니다.',
     '층 안내판: 각 층 엘리베이터 옆 안내판에서 그 층에 등록하거나 등록을 해제할 수 있습니다.',
     '층 등록: 2~11층 중 한 곳에 입장 등록을 할 수 있습니다. 한 사람은 한 층에만 등록할 수 있어요.',
-    '꾸미기: 등록한 층에서는 가구와 소품을 놓고, 옮기고, 돌리고, 지울 수 있습니다.',
+    '꾸미기: 등록한 층에서 메뉴의 꾸미기를 누르면 가구를 놓고, 옮기고, 돌리고, 지울 수 있습니다. 의자와 소파에는 앉을 수 있어요.',
     '게시판: 로비 전체 게시판은 누구나 읽고, 층 게시판은 그 층에 등록한 사원이 글을 씁니다. 고정한 글은 게시판에 종이로 붙어요.',
     '직급: 인턴으로 시작해 사원, 부팀장, 팀장, 부장, 사장 순으로 올라갑니다. 팀장 이상이 아래 직급을 승진시킵니다.',
     '메뉴: 오른쪽 위 메뉴에서 프로필, 사원 명부, 게시판, 음악 설정, 로그아웃을 쓸 수 있어요. 캐릭터를 눌러도 프로필이 열립니다.',
@@ -221,13 +221,14 @@ function bonsaBoot() {
     return g;
   }
   // 걷는 동작과 우산 든 자세
-  function pose(g, moving, walk, umbOn) {
+  function pose(g, moving, walk, umbOn, sitting) {
     var u = g.userData, s = moving ? Math.sin(walk) : 0;
-    u.feet[0].position.z = 0.05 + s * 0.16; u.feet[1].position.z = 0.05 - s * 0.16;
+    u.feet[0].position.z = sitting ? 0.34 : 0.05 + s * 0.16; u.feet[1].position.z = sitting ? 0.34 : 0.05 - s * 0.16;
+    u.feet[0].position.y = u.feet[1].position.y = sitting ? 0.2 : 0.1;
     u.arms[0].position.z = 0.02 - s * 0.15;
     if (umbOn) u.arms[1].position.set(0.44, 1.12, 0.14); else u.arms[1].position.set(0.52, 0.78, 0.02 + s * 0.15);
     u.umb.visible = umbOn;
-    u.shadow.position.y = 0.03 - g.position.y;
+    u.shadow.position.y = 0.03 - g.position.y; u.shadow.visible = !sitting;
     if (u.tag) u.tag.position.y = umbOn ? 3.05 : 2.25;
     if (u.bubble) u.bubble.position.y = umbOn ? 3.7 : 2.9;
   }
@@ -546,11 +547,12 @@ function bonsaBoot() {
   scene.add(office); scene.add(ceo);
   office.visible = false; ceo.visible = false;
   var roomLight = new THREE.MeshBasicMaterial({ color: 0xfffbea });
+  var roomTops = [];                                   // 꾸미기 모드에서 위에서 내려다볼 때 숨길 것들 (천장, 조명)
   function roomShell(g, floorMat, wall, wall2) {
     var fl = new THREE.Mesh(new THREE.PlaneGeometry(LW, LD), floorMat);
     fl.rotation.x = -Math.PI / 2; g.add(fl);
     var ce = new THREE.Mesh(new THREE.PlaneGeometry(LW, LD), mat(0xf7f7f4));
-    ce.rotation.x = Math.PI / 2; ce.position.y = LH; g.add(ce);
+    ce.rotation.x = Math.PI / 2; ce.position.y = LH; g.add(ce); roomTops.push(ce);
     box(LW, LH, 0.3, wall, 0, LH / 2, -LD / 2 - 0.15, g);
     box(LW, LH, 0.3, wall, 0, LH / 2, LD / 2 + 0.15, g);
     box(0.3, LH, LD, wall2, -LW / 2 - 0.15, LH / 2, 0, g);
@@ -561,7 +563,7 @@ function bonsaBoot() {
     box(0.08, 0.25, LD, 0x6f6a62, LW / 2 - 0.04, 0.125, 0, g);
     [[-6, -4], [6, -4], [-6, 4], [6, 4], [0, 0]].forEach(function (p) {
       var lp = new THREE.Mesh(new THREE.BoxGeometry(3.2, 0.08, 1.2), roomLight);
-      lp.position.set(p[0], LH - 0.05, p[1]); g.add(lp);
+      lp.position.set(p[0], LH - 0.05, p[1]); g.add(lp); roomTops.push(lp);
     });
     // 엘리베이터 문
     var ex = W.ELEV.x, ez = -LD / 2 + 0.12;
@@ -618,6 +620,69 @@ function bonsaBoot() {
       var pl = new THREE.Mesh(gPlant, mat(0x4c9a55)); pl.scale.y = 1.4; pl.position.set(p[0], 1.5, p[1]); ceo.add(pl);
     });
   })();
+  /* ---------- 꾸미기 가구 (모양만 여기서 만들고, 놓을 수 있는지는 world.js 규칙으로 서버가 판정) ---------- */
+  var furnGroup = new THREE.Group(); scene.add(furnGroup);
+  var furnItems = {}, furnCols = [];
+  var shadeMat = new THREE.MeshBasicMaterial({ color: 0xffe7a8 });
+  function buildFurn(type) {
+    var g = new THREE.Group(), m;
+    function cyl(rt, rb, hh, color, x, y, z, seg) {
+      var c = new THREE.Mesh(new THREE.CylinderGeometry(rt, rb, hh, seg || 12), mat(color)); c.position.set(x, y, z); g.add(c); return c;
+    }
+    if (type === 'desk') {
+      box(1.9, 0.08, 0.9, 0xc9a26b, 0, 0.76, 0, g); box(0.08, 0.72, 0.85, 0xb38a55, -0.88, 0.36, 0, g);
+      box(0.08, 0.72, 0.85, 0xb38a55, 0.88, 0.36, 0, g); box(1.7, 0.45, 0.05, 0xb38a55, 0, 0.47, -0.4, g);
+      box(0.6, 0.4, 0.04, 0x1c2430, 0.35, 1.08, -0.2, g); box(0.06, 0.12, 0.06, 0x39424f, 0.35, 0.86, -0.2, g);
+    } else if (type === 'chair') {
+      box(0.62, 0.1, 0.62, 0x4c6893, 0, 0.5, 0.02, g); box(0.62, 0.62, 0.1, 0x3f5a82, 0, 0.86, -0.27, g);
+      cyl(0.05, 0.05, 0.45, 0x39424f, 0, 0.23, 0); cyl(0.3, 0.3, 0.05, 0x39424f, 0, 0.03, 0);
+    } else if (type === 'sofa') {
+      box(1.9, 0.45, 0.86, 0x5c7aa8, 0, 0.25, 0.04, g); box(1.9, 0.55, 0.24, 0x4c6893, 0, 0.72, -0.34, g);
+      box(0.2, 0.62, 0.86, 0x4c6893, -0.86, 0.45, 0.04, g); box(0.2, 0.62, 0.86, 0x4c6893, 0.86, 0.45, 0.04, g);
+    } else if (type === 'table') {
+      cyl(0.46, 0.46, 0.07, 0xf1ece2, 0, 0.52, 0, 18); cyl(0.06, 0.06, 0.5, 0x8a94a3, 0, 0.26, 0); cyl(0.26, 0.26, 0.04, 0x8a94a3, 0, 0.02, 0);
+    } else if (type === 'shelf') {
+      box(1.9, 2.0, 0.5, 0x7a5a3c, 0, 1.0, -0.2, g);
+      [0.35, 0.95, 1.55].forEach(function (y, r) {
+        box(1.7, 0.45, 0.06, 0x5b4129, 0, y + 0.05, 0.03, g);
+        [0x2f6fed, 0xc0392b, 0x2f8f6f, 0xd4af37, 0x6b4f9a].forEach(function (col, k) { box(0.22, 0.4, 0.1, col, -0.6 + k * 0.3 + r * 0.04, y + 0.03, 0.08, g); });
+      });
+    } else if (type === 'plant') {
+      cyl(0.3, 0.22, 0.5, 0xc98b5e, 0, 0.25, 0);
+      m = new THREE.Mesh(new THREE.IcosahedronGeometry(0.5, 1), mat(0x4c9a55)); m.scale.y = 1.35; m.position.y = 1.05; g.add(m);
+    } else if (type === 'lamp') {
+      cyl(0.22, 0.25, 0.06, 0x39424f, 0, 0.03, 0); cyl(0.03, 0.03, 1.5, 0x39424f, 0, 0.78, 0, 8);
+      m = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.3, 0.36, 14, 1, true), shadeMat); m.position.y = 1.62; g.add(m);
+    } else if (type === 'wall') {
+      box(1.96, 1.5, 0.12, 0xaab3bf, 0, 0.75, 0, g); box(1.96, 0.08, 0.16, 0x6b7480, 0, 1.52, 0, g); box(1.96, 0.1, 0.16, 0x6b7480, 0, 0.05, 0, g);
+    } else {                                                             // 러그
+      box(2.9, 0.03, 1.9, 0xb5524a, 0, 0.02, 0, g); box(2.5, 0.035, 1.5, 0xd98a6e, 0, 0.022, 0, g);
+    }
+    return g;
+  }
+  function dropFurn(it) {
+    furnGroup.remove(it.g);
+    for (var i = 0; i < it.g.children.length; i++) if (it.g.children[i].geometry) it.g.children[i].geometry.dispose();
+  }
+  function placeFurn(it) { it.g.position.set(it.x, 0, it.z); it.g.rotation.y = it.rot * Math.PI / 2; }
+  function rebuildFurnCols() {
+    furnCols = [];
+    for (var id in furnItems) if (W.FURN[furnItems[id].type].solid) furnCols.push(W.furnRect(furnItems[id]));
+  }
+  function addFurn(a) {
+    if (!Array.isArray(a) || !Object.prototype.hasOwnProperty.call(W.FURN, a[1])) return;
+    var it = furnItems[a[0]];
+    if (!it) { it = furnItems[a[0]] = { id: a[0], type: a[1], g: buildFurn(a[1]) }; furnGroup.add(it.g); }
+    it.x = Number(a[2]); it.z = Number(a[3]); it.rot = Number(a[4]) & 3;
+    placeFurn(it);
+  }
+  function setFurn(list) {
+    for (var id in furnItems) dropFurn(furnItems[id]);
+    furnItems = {};
+    if (Array.isArray(list)) list.forEach(addFurn);
+    rebuildFurnCols();
+  }
+
   // 지금 있는 층의 번호와 이름을 북쪽 벽에 크게 붙인다 (층을 옮기거나 이름이 바뀌면 다시 만든다)
   var floorSign = null;
   function dropPlane(m) {
@@ -655,7 +720,7 @@ function bonsaBoot() {
     var g = makeCharacter(BODY_COLORS[p.id % BODY_COLORS.length], tagOf(p.r, p.n), p.id);
     g.position.set(p.x, 0, p.z); g.rotation.y = p.f;
     scene.add(g);
-    others[p.id] = { g: g, x: p.x, z: p.z, f: p.f, walk: 0, umb: !!p.u, n: p.n, r: p.r };
+    others[p.id] = { g: g, x: p.x, z: p.z, f: p.f, walk: 0, umb: !!p.u, n: p.n, r: p.r, sit: !!p.s };
   }
   function removeOther(id) {
     var o = others[id];
@@ -674,6 +739,7 @@ function bonsaBoot() {
     area = next;
     outdoor.visible = next === 'out'; lobby.visible = next === 'in';
     ceo.visible = next === 'f12'; office.visible = !outdoor.visible && !lobby.visible && !ceo.visible;
+    furnGroup.visible = ceo.visible || office.visible;
     P.x = x; P.z = z;
     refreshPlace();
   }
@@ -682,13 +748,14 @@ function bonsaBoot() {
     if ($('place').textContent !== t) $('place').textContent = t;
     refreshFloorSign();
   }
-  function switchArea(next, x, z, list, face, pins) {
+  function switchArea(next, x, z, list, face, pins, furn) {
     lockUntil = performance.now() + 700;
     $('fade').classList.add('on');
     setTimeout(function () {
-      closeElev(); closeFinfo(); closeRoster(); closeProf(); closeBoard(); closeMenu();
+      closeElev(); closeFinfo(); closeRoster(); closeProf(); closeBoard(); closeMenu(); closeDeco();
+      mySit = false;
       applyArea(next, x, z);
-      setPapers(pins);
+      setPapers(pins); setFurn(furn);
       P.face = typeof face === 'number' ? face : (next === 'in' ? Math.PI : 0);
       cam.yaw = next === 'out' ? Math.PI : 0; cam.pitch = next === 'out' ? 0.42 : 0.36;
       setOthers(list);
@@ -943,7 +1010,7 @@ function bonsaBoot() {
       reg.style.display = 'none';
       canName = isTop();
     } else {
-      $('fiNote').textContent = '등록 사원 ' + f.c + ' / ' + W.FLOOR_CAP + '명. 등록한 층에서는 게시판에 글을 쓸 수 있고, 꾸미기(6단계)도 할 수 있습니다. 한 사람은 한 층에만 등록할 수 있습니다.'
+      $('fiNote').textContent = '등록 사원 ' + f.c + ' / ' + W.FLOOR_CAP + '명. 등록한 층에서는 게시판에 글을 쓰고 메뉴의 꾸미기로 가구를 놓을 수 있습니다. 한 사람은 한 층에만 등록할 수 있습니다.'
         + (me.floor && me.floor !== n ? ' 지금은 ' + me.floor + '층에 등록되어 있습니다.' : '');
       reg.style.display = '';
       reg.textContent = me.floor === n ? '이 층 등록 해제' : me.floor ? me.floor + '층 등록 해제' : '이 층에 등록';
@@ -967,6 +1034,122 @@ function bonsaBoot() {
   $('fiPassOff').addEventListener('click', function () { sendMsg({ t: 'fpass', pw: '' }); });
   $('fiClose').addEventListener('click', closeFinfo);
   $('finfo').addEventListener('click', function (e) { if (e.target === $('finfo')) closeFinfo(); });
+
+  /* ---------- 꾸미기 모드: 위에서 내려다보며 가구를 놓고, 옮기고, 돌리고, 지운다 ---------- */
+  var deco = { on: false, type: null, sel: 0, rot: 0, H: 30, cz: 0 };
+  var mySit = false, lastStand = 0;
+  var selMesh = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ color: 0xffd23f, transparent: true, opacity: 0.5, depthWrite: false }));
+  selMesh.rotation.x = -Math.PI / 2; selMesh.visible = false; scene.add(selMesh);
+  function canDeco() {
+    var n = W.floorOf(area);
+    return n === 12 ? isTop() : (n >= W.FLOOR_MIN && (me.floor === n || me.r === 'owner'));
+  }
+  function renderDeco() {
+    var it = deco.sel ? furnItems[deco.sel] : null, n = 0, id, txt;
+    if (deco.sel && !it) deco.sel = 0;
+    for (id in furnItems) n++;
+    if (deco.type) txt = W.FURN[deco.type].n + ': 놓을 자리를 누르세요. 회전 단추로 방향을 바꿉니다 (지금 ' + deco.rot * 90 + '도).';
+    else if (it) txt = W.FURN[it.type].n + ' 선택됨: 옮길 자리를 누르거나 회전·삭제를 누르세요.';
+    else txt = '아래에서 가구를 고르거나, 놓인 가구를 눌러 선택하세요.';
+    $('decoInfo').textContent = '가구 ' + n + '/' + W.FURN_CAP + ' · ' + txt;
+    var bs = $('decoTypes').children;
+    for (var i = 0; i < bs.length; i++) bs[i].className = bs[i].getAttribute('data-type') === deco.type ? 'on' : '';
+    $('dcRot').disabled = !deco.type && !it; $('dcDel').disabled = !it; $('dcNone').disabled = !deco.type && !it;
+    if (it) {
+      var sz = W.furnSize(it.type, it.rot);
+      selMesh.scale.set(sz.w, sz.d, 1); selMesh.position.set(it.x, 0.08, it.z); selMesh.visible = true;
+    } else selMesh.visible = false;
+  }
+  Object.keys(W.FURN).forEach(function (k) {
+    var b = document.createElement('button'); b.type = 'button'; b.textContent = W.FURN[k].n; b.setAttribute('data-type', k);
+    $('decoTypes').appendChild(b);
+  });
+  function setTops(v) { for (var i = 0; i < roomTops.length; i++) roomTops[i].visible = v; }
+  function openDeco() {
+    if (!playing || uiOpen) return;
+    if (!canDeco()) { toast(W.floorOf(area) >= 2 ? '이 층에 등록한 사원만 꾸밀 수 있습니다.' : '꾸미기는 2층부터 할 수 있습니다.'); return; }
+    if (mySit) { toast('먼저 자리에서 일어나 주세요.'); return; }
+    deco.on = true; deco.type = null; deco.sel = 0; deco.rot = 0; uiOpen = true;
+    $('decoBar').style.display = 'block'; $('chatBtn').style.display = 'none'; $('stick').style.visibility = 'hidden';
+    setTops(false); renderDeco();
+  }
+  function closeDeco() {
+    if (!deco.on) return;
+    deco.on = false; uiOpen = false; selMesh.visible = false;
+    $('decoBar').style.display = 'none'; $('chatBtn').style.display = ''; $('stick').style.visibility = '';
+    setTops(true); camera.up.set(0, 1, 0);
+  }
+  function decoCamera() {
+    var t = Math.tan(camera.fov * Math.PI / 360), asp = camera.aspect;
+    var H = Math.max((LD / 2 + 1) / t, (LW / 2 + 1) / (t * asp)) * 1.3;   // 방 전체가 보이는 높이 (아래 도구 막대만큼 여유)
+    deco.H = H; deco.cz = H * t * 0.2;
+    camera.up.set(0, 0, -1);
+    camera.position.set(0, H, deco.cz); camera.lookAt(0, 0, deco.cz);
+  }
+  // 화면에서 누른 곳이 바닥의 어디인지 (똑바로 내려다보는 시점이라 직접 계산한다)
+  function decoPoint(px, py) {
+    var t = Math.tan(camera.fov * Math.PI / 360);
+    return { x: (px / window.innerWidth * 2 - 1) * deco.H * t * camera.aspect, z: deco.cz - (1 - py / window.innerHeight * 2) * deco.H * t };
+  }
+  function decoTap(px, py) {
+    var pt = decoPoint(px, py), id, it, r, hit = 0, sz;
+    if (deco.type) {
+      sz = W.furnSize(deco.type, deco.rot);
+      sendMsg({ t: 'deco', op: 'add', type: deco.type, rot: deco.rot, x: W.snap(pt.x, sz.w), z: W.snap(pt.z, sz.d) });
+      return;
+    }
+    for (id in furnItems) {                               // 가구가 러그보다 먼저 잡히게 한다
+      it = furnItems[id]; r = W.furnRect(it);
+      if (pt.x > r.x0 && pt.x < r.x1 && pt.z > r.z0 && pt.z < r.z1 && (!hit || W.FURN[it.type].solid)) hit = it.id;
+    }
+    if (hit && hit !== deco.sel) { deco.sel = hit; renderDeco(); return; }
+    it = deco.sel ? furnItems[deco.sel] : null;
+    if (it && !hit) {
+      sz = W.furnSize(it.type, it.rot);
+      sendMsg({ t: 'deco', op: 'mv', id: it.id, rot: it.rot, x: W.snap(pt.x, sz.w), z: W.snap(pt.z, sz.d) });
+    }
+  }
+  $('decoTypes').addEventListener('click', function (e) {
+    var b = e.target.closest ? e.target.closest('button') : null;
+    if (!b) return;
+    var k = b.getAttribute('data-type');
+    deco.type = deco.type === k ? null : k; deco.sel = 0; deco.rot = 0; renderDeco();
+  });
+  $('dcRot').addEventListener('click', function () {
+    var it = deco.sel ? furnItems[deco.sel] : null;
+    if (deco.type) { deco.rot = (deco.rot + 1) % 4; renderDeco(); }
+    else if (it) {
+      // 돌릴 때마다 반 칸씩 밀려나지 않도록, 격자에 다시 맞출 때 올림과 내림을 번갈아 쓰게 살짝 치우쳐 보낸다
+      var nr = (it.rot + 1) % 4, nudge = nr % 2 ? 0.01 : -0.01;
+      sendMsg({ t: 'deco', op: 'mv', id: it.id, rot: nr, x: it.x + nudge, z: it.z + nudge });
+    }
+  });
+  $('dcDel').addEventListener('click', function () { if (deco.sel) sendMsg({ t: 'deco', op: 'del', id: deco.sel }); });
+  $('dcNone').addEventListener('click', function () { deco.type = null; deco.sel = 0; renderDeco(); });
+  $('dcDone').addEventListener('click', closeDeco);
+  function onFurn(m) {
+    if (m.op === 'del') { if (furnItems[m.id]) { dropFurn(furnItems[m.id]); delete furnItems[m.id]; } }
+    else addFurn(m.it);
+    rebuildFurnCols();
+    if (deco.on) renderDeco();
+  }
+  // 앉을 수 있는 가장 가까운 빈 자리
+  function nearSeat() {
+    var best = 1.7, found = null, id, it, seats, k, pos, d, o, taken, oid;
+    for (id in furnItems) {
+      it = furnItems[id]; seats = W.FURN[it.type].seats;
+      if (!seats) continue;
+      for (k = 0; k < seats.length; k++) {
+        pos = W.seatPos(it, k);
+        d = Math.sqrt((pos.x - P.x) * (pos.x - P.x) + (pos.z - P.z) * (pos.z - P.z));
+        if (d >= best) continue;
+        taken = false;
+        for (oid in others) { o = others[oid]; if (o.sit && Math.abs(o.x - pos.x) < 0.2 && Math.abs(o.z - pos.z) < 0.2) taken = true; }
+        if (!taken) { best = d; found = { id: it.id, slot: k, d: d }; }
+      }
+    }
+    return found;
+  }
 
   /* ---------- 프로필 카드, 사원 명부, 승진·강등 (단추가 보여도 판정은 서버가 다시 한다) ---------- */
   var RANK_ORDER = ['intern', 'staff', 'deputy', 'lead', 'manager', 'ceo'];
@@ -1061,7 +1244,7 @@ function bonsaBoot() {
   function tapStart(e) { tap[e.pointerId] = { x: e.clientX, y: e.clientY, t: performance.now() }; }
   function tapEnd(e) {
     var s0 = tap[e.pointerId]; delete tap[e.pointerId];
-    if (s0 && performance.now() - s0.t < 350 && Math.abs(e.clientX - s0.x) < 10 && Math.abs(e.clientY - s0.y) < 10) pick(e.clientX, e.clientY);
+    if (s0 && performance.now() - s0.t < 350 && Math.abs(e.clientX - s0.x) < 10 && Math.abs(e.clientY - s0.y) < 10) { if (deco.on) decoTap(e.clientX, e.clientY); else pick(e.clientX, e.clientY); }
   }
   var current = null;
   function doAction() { if (current && !uiOpen) current.run(); }
@@ -1222,8 +1405,9 @@ function bonsaBoot() {
         player.userData.umb.children[0].material = umbMats[myId % umbMats.length];
         if (typeof m.now === 'number') clockOffset = m.now - Date.now();
         if (m.wx) setWeather(m.wx, true);
+        closeDeco(); mySit = false;
         applyArea(m.me.area, m.me.x, m.me.z);
-        setPapers(m.pins);
+        setPapers(m.pins); setFurn([]);
         setOthers(m.players);
         $('count').textContent = '접속 ' + m.online + '명';
         $('auth').style.display = 'none'; $('net').style.display = 'none';
@@ -1249,7 +1433,7 @@ function bonsaBoot() {
         if (m.id === myId) myUmb = !!m.on;
         else if (others[m.id]) others[m.id].umb = !!m.on;
         break;
-      case 'area': switchArea(m.area, m.x, m.z, m.players, m.f, m.pins); break;
+      case 'area': switchArea(m.area, m.x, m.z, m.players, m.f, m.pins, m.furn); break;
       case 'floors': setFloors(m.floors); break;
       case 'me': me.floor = m.floor || null; if ($('finfo').style.display === 'flex') renderFinfo(); if ($('elev').style.display === 'flex') renderElev(); break;
       case 'needpw': $('pwRow').style.display = 'block'; $('pwIn').value = ''; $('pwIn').focus(); break;
@@ -1266,6 +1450,11 @@ function bonsaBoot() {
       case 'posted': setEdit(0); toast(m.edit ? '글을 고쳤습니다.' : '글을 올렸습니다.'); break;
       case 'bnew': if (boardOpen() && m.b === curBoard && !editId) sendMsg({ t: 'posts', b: curBoard }); break;
       case 'pins': if (m.b === W.floorOf(area)) setPapers(m.list); break;
+      case 'furn': onFurn(m); break;
+      case 'sit':
+        if (m.id === myId) { mySit = !!m.s; P.x = m.x; P.z = m.z; P.face = m.f; sent.x = P.x; sent.z = P.z; }
+        else if (others[m.id]) { o = others[m.id]; o.sit = !!m.s; o.x = m.x; o.z = m.z; o.f = m.f; o.g.position.x = m.x; o.g.position.z = m.z; }
+        break;
       case 'roster': renderRoster(m.list); break;
       case 'sys': logLine(m.m, true); break;
       case 'online': $('count').textContent = '접속 ' + m.n + '명'; break;
@@ -1545,19 +1734,23 @@ function bonsaBoot() {
     var mag = Math.sqrt(ix * ix + iy * iy);
     if (mag > 1) { ix /= mag; iy /= mag; mag = 1; }
     var moving = playing && mag > 0.12 && !uiOpen && !chatOpen && now > lockUntil;
+    if (moving && mySit) {                               // 앉아 있을 때 움직이려 하면 먼저 일어선다
+      moving = false;
+      if (now - lastStand > 600) { lastStand = now; sendMsg({ t: 'stand' }); }
+    }
     if (moving) {
       var sy = Math.sin(cam.yaw), cy = Math.cos(cam.yaw);
       var vx = (-sy * iy + cy * ix), vz = (-cy * iy - sy * ix);
       var nx = P.x + vx * W.SPEED * dt, nz = P.z + vz * W.SPEED * dt;
-      if (!W.blocked(area, nx, P.z)) P.x = nx;
-      if (!W.blocked(area, P.x, nz)) P.z = nz;
+      if (!W.blocked(area, nx, P.z, furnCols)) P.x = nx;
+      if (!W.blocked(area, P.x, nz, furnCols)) P.z = nz;
       P.face = turn(P.face, Math.atan2(vx, vz), Math.min(1, dt * 12));
       P.walk += dt * 11 * mag;
     }
-    player.position.set(P.x, moving ? Math.abs(Math.sin(P.walk)) * 0.09 : 0, P.z);
+    player.position.set(P.x, mySit ? 0.3 : (moving ? Math.abs(Math.sin(P.walk)) * 0.09 : 0), P.z);
     player.rotation.y = P.face;
     var umbShow = area === 'out' && E.wet > 0.02;       // 우산은 야외에서 비나 눈이 올 때만 보인다
-    pose(player, moving, P.walk, myUmb && umbShow);
+    pose(player, moving, P.walk, myUmb && umbShow, mySit);
     expireBubble(player, now);
     var ub = $('umbBtn');
     if (playing && umbShow && !chatOpen) {
@@ -1567,7 +1760,7 @@ function bonsaBoot() {
     } else ub.style.display = 'none';
 
     // 내 위치를 초당 10번까지 서버로 보낸다
-    if (playing && now - lastSend > 100 && now > lockUntil &&
+    if (playing && !mySit && now - lastSend > 100 && now > lockUntil &&
         (Math.abs(P.x - sent.x) > 0.01 || Math.abs(P.z - sent.z) > 0.01 || Math.abs(P.face - sent.f) > 0.05)) {
       lastSend = now; sent.x = P.x; sent.z = P.z; sent.f = P.face;
       sendMsg({ t: 'move', x: Math.round(P.x * 100) / 100, z: Math.round(P.z * 100) / 100, f: Math.round(P.face * 100) / 100 });
@@ -1589,8 +1782,8 @@ function bonsaBoot() {
         o.g.position.x += ddx * Math.min(1, dt * 10); o.g.position.z += ddz * Math.min(1, dt * 10);
         o.walk += dt * 11;
       }
-      o.g.position.y = dd > 0.05 ? Math.abs(Math.sin(o.walk)) * 0.09 : 0;
-      pose(o.g, dd > 0.05, o.walk, o.umb && umbShow);
+      o.g.position.y = o.sit ? 0.3 : (dd > 0.05 ? Math.abs(Math.sin(o.walk)) * 0.09 : 0);
+      pose(o.g, dd > 0.05 && !o.sit, o.walk, o.umb && umbShow, o.sit);
       o.g.rotation.y = turn(o.g.rotation.y, o.f, Math.min(1, dt * 12));
       // 멀리 있는 사람의 이름표는 숨겨 그리는 양을 줄인다
       far = (o.g.position.x - P.x) * (o.g.position.x - P.x) + (o.g.position.z - P.z) * (o.g.position.z - P.z) > 900;
@@ -1618,6 +1811,11 @@ function bonsaBoot() {
         sd = Math.sqrt((P.x - sp[si].x) * (P.x - sp[si].x) + (P.z - sp[si].z) * (P.z - sp[si].z));
         if (sd < sp[si].r && sd < sbest) { sbest = sd; current = sp[si]; }
       }
+      if (mySit) current = { label: '일어서기', run: function () { sendMsg({ t: 'stand' }); } };
+      else if (area !== 'in') {
+        var seat = nearSeat();
+        if (seat && seat.d < sbest) current = { label: '앉기', run: function () { sendMsg({ t: 'sit', id: seat.id, slot: seat.slot }); } };
+      }
     }
     var act = $('act');
     if (current && !uiOpen && !chatOpen && playing) {
@@ -1625,6 +1823,12 @@ function bonsaBoot() {
       act.style.display = 'block';
     } else act.style.display = 'none';
 
+    if (deco.on) {                                       // 꾸미기 모드: 위에서 내려다본다
+      decoCamera();
+      envTick(dt, now / 1000, 0, deco.H, 0);
+      renderer.render(scene, camera);
+      return;
+    }
     // 3인칭 카메라
     var dist = area !== 'out' ? 5.6 : 8;
     var h = Math.cos(cam.pitch) * dist;
