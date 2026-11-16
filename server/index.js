@@ -176,7 +176,7 @@ setInterval(() => {
   }
 }, 25000).unref();
 
-db.init().then(() => {
+db.init().then(() => game.init()).then(() => {
   weather.start();
   server.listen(config.port, () => {
     console.log('본사 서버 시작: 포트 ' + config.port + ', 저장소 ' + db.kind);

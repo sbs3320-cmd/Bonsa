@@ -1,18 +1,28 @@
 'use strict';
-// 게임 상태. 장소(야외, 1층 로비)마다 방을 나눠 같은 방 사람끼리만 위치와 채팅을 주고받는다.
+// 게임 상태. 장소(야외, 1층 로비, 2~12층)마다 방을 나눠 같은 방 사람끼리만 위치와 채팅을 주고받는다.
 // 클라이언트가 보낸 값은 믿지 않고, 이동 속도와 벽 통과, 문 위치를 서버가 다시 검사한다.
 const World = require('../public/world.js');
 const config = require('./config');
 const weather = require('./weather');
+const db = require('./db');
+const auth = require('./auth');
 
 const TICK_MS = 100;            // 위치 방송 주기 (초당 10번)
 const MAX_MOVES_PER_SEC = 30;
 const CHAT_MAX = 5, CHAT_WINDOW_MS = 5000, CHAT_LEN = 120;
+const ACT_MAX = 8, ACT_WINDOW_MS = 10000;      // 엘리베이터, 층 등록 같은 요청 횟수 제한
+const RE_FLOOR_NAME = /^[가-힣a-zA-Z0-9 ]{0,12}$/;
 
 class Game {
   constructor() {
     this.players = new Map();                       // uid -> player
     this.rooms = { out: new Set(), in: new Set() };
+    this.floors = new Map();                        // 층 번호 -> { name, count, hash }
+    for (let n = World.FLOOR_MIN; n <= World.FLOOR_MAX; n++) {
+      this.rooms['f' + n] = new Set();
+      this.floors.set(n, { name: '', count: 0, hash: null });
+    }
+    this.lockFail = auth.limiter(5, 10 * 60 * 1000);   // 12층 비밀번호: 10분 동안 5번 틀리면 잠금
     this.ticks = 0; this.lastOnline = 0;
     this.timer = setInterval(() => this.tick(), TICK_MS);
     this.timer.unref();
@@ -22,6 +32,32 @@ class Game {
       for (const p of this.players.values()) if (p.ws.readyState === 1) p.ws.send(msg);
     });
   }
+
+  // 서버가 켜질 때 DB에서 층 이름, 등록 인원, 12층 비밀번호 해시를 읽어 온다
+  async init() {
+    const d = await db.loadFloors();
+    d.floors.forEach(r => { const f = this.floors.get(r.floor); if (f) { f.name = r.name || ''; f.hash = r.pass_hash || null; } });
+    d.counts.forEach(r => { const f = this.floors.get(r.floor); if (f) f.count = r.n; });
+  }
+  floorList() {
+    const list = [];
+    for (const [n, f] of this.floors) list.push([n, f.name, f.count, f.hash ? 1 : 0]);   // 해시 자체는 절대 보내지 않는다
+    return list;
+  }
+  broadcastAll(obj) {
+    const msg = JSON.stringify(obj);
+    for (const p of this.players.values()) if (p.ws.readyState === 1) p.ws.send(msg);
+  }
+  toast(p, m) { this.send(p.ws, { t: 'toast', m }); }
+  isTop(p) { return p.rank === 'owner' || p.rank === 'ceo'; }
+  actOk(p) {
+    const now = Date.now();
+    p.actTimes = p.actTimes.filter(t => now - t < ACT_WINDOW_MS);
+    if (p.actTimes.length >= ACT_MAX) { this.toast(p, '요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.'); return false; }
+    p.actTimes.push(now);
+    return true;
+  }
+  alive(p) { return this.players.get(p.id) === p; }
 
   send(ws, obj) { if (ws.readyState === 1) ws.send(JSON.stringify(obj)); }
   broadcast(area, obj, except) {
@@ -53,11 +89,12 @@ class Game {
       rank: config.superAdmin && user.username === config.superAdmin ? 'owner' : user.rank,
       area: 'out', x: World.SPAWN.start.x + (Math.random() * 4 - 2), z: World.SPAWN.start.z + Math.random() * 2,
       f: Math.PI, dirty: false, lastMove: Date.now(), moveSec: 0, moveCount: 0, chatTimes: [],
-      umb: false, lastUmb: 0
+      umb: false, lastUmb: 0, floor: user.floor || null, actTimes: [], busy: false, unlocked12: false
     };
     this.players.set(p.id, p);
     this.rooms[p.area].add(p);
-    this.send(ws, { t: 'hello', id: p.id, me: { n: p.name, r: p.rank, area: p.area, x: p.x, z: p.z },
+    this.send(ws, { t: 'hello', id: p.id, me: { n: p.name, r: p.rank, area: p.area, x: p.x, z: p.z, floor: p.floor },
+      floors: this.floorList(),
       players: this.roster(p.area, p), online: this.players.size,
       now: Date.now(), wx: weather.get() });
     this.broadcast(p.area, { t: 'join', p: this.pub(p) }, p);
@@ -79,6 +116,15 @@ class Game {
     else if (m.t === 'chat') this.onChat(p, m);
     else if (m.t === 'area') this.onArea(p, m);
     else if (m.t === 'umb') this.onUmbrella(p, m);
+    else if (m.t === 'elev' || m.t === 'freg' || m.t === 'fname' || m.t === 'fpass') {
+      // DB를 쓰는 요청은 한 사람당 한 번에 하나씩만 처리한다
+      if (p.busy || !this.actOk(p)) return;
+      p.busy = true;
+      const run = m.t === 'elev' ? this.onElev(p, m) : m.t === 'freg' ? this.onFloorReg(p, m)
+        : m.t === 'fname' ? this.onFloorName(p, m) : this.onFloorPass(p, m);
+      run.catch(e => { console.error(e); if (this.alive(p)) this.toast(p, '요청을 처리하지 못했습니다.'); })
+        .then(() => { p.busy = false; });
+    }
   }
 
   onMove(p, m) {
@@ -126,13 +172,96 @@ class Game {
   onArea(p, m) {
     const to = World.door(p.area, p.x, p.z, 0.8);
     if (!to || m.to !== to) { this.send(p.ws, { t: 'fix', x: p.x, z: p.z }); return; }
+    this.moveTo(p, to, World.SPAWN[to].x, World.SPAWN[to].z, to === 'in' ? Math.PI : 0);
+  }
+
+  moveTo(p, to, x, z, f) {
     this.rooms[p.area].delete(p);
     this.broadcast(p.area, { t: 'leave', id: p.id });
-    p.area = to; p.x = World.SPAWN[to].x; p.z = World.SPAWN[to].z; p.f = to === 'in' ? Math.PI : 0;
+    p.area = to; p.x = x; p.z = z; p.f = f;
     p.lastMove = Date.now(); p.dirty = false;
     this.rooms[to].add(p);
-    this.send(p.ws, { t: 'area', area: to, x: p.x, z: p.z, players: this.roster(to, p) });
+    this.send(p.ws, { t: 'area', area: to, x: p.x, z: p.z, f: p.f, players: this.roster(to, p) });
     this.broadcast(to, { t: 'join', p: this.pub(p) }, p);
+  }
+
+  // 엘리베이터: 층 사이를 오가는 유일한 방법. 엘리베이터 앞에 서 있는지 서버가 확인한다.
+  async onElev(p, m) {
+    const to = Number(m.to), cur = World.floorOf(p.area);
+    if (!Number.isInteger(to) || to < 1 || to > World.FLOOR_MAX || to === cur) return;
+    if (!World.nearElev(p.area, p.x, p.z, 0.8)) return this.toast(p, '엘리베이터 앞에서 이용해 주세요.');
+    const f12 = this.floors.get(12);
+    if (to === 12 && f12.hash && !this.isTop(p) && !p.unlocked12) {
+      if (typeof m.pw !== 'string' || !m.pw) return this.send(p.ws, { t: 'needpw' });
+      if (this.lockFail.over(p.id)) return this.toast(p, '비밀번호를 여러 번 틀렸습니다. 10분 뒤에 다시 시도해 주세요.');
+      const ok = await auth.checkPassword(m.pw.slice(0, 72), f12.hash);
+      if (!this.alive(p)) return;
+      if (!ok) { this.lockFail.hit(p.id); return this.toast(p, '비밀번호가 맞지 않습니다.'); }
+      this.lockFail.clear(p.id);
+      p.unlocked12 = true;
+      if (!World.nearElev(p.area, p.x, p.z, 0.8)) return;      // 확인하는 사이 자리를 떴으면 태우지 않는다
+    }
+    this.moveTo(p, World.areaOf(to), World.ELEV_OUT.x + (Math.random() - 0.5), World.ELEV_OUT.z, 0);
+  }
+
+  // 층 등록/해제. 한 사람은 한 층에만, 한 층에는 20명까지.
+  async onFloorReg(p, m) {
+    if (m.on !== true) {
+      if (!p.floor) return;
+      const was = p.floor;
+      await db.unregisterFloor(p.id);
+      p.floor = null;
+      this.floors.get(was).count = Math.max(0, this.floors.get(was).count - 1);
+      if (this.alive(p)) { this.send(p.ws, { t: 'me', floor: null }); this.toast(p, was + '층 등록을 해제했습니다.'); }
+      return this.broadcastAll({ t: 'floors', floors: this.floorList() });
+    }
+    const floor = World.floorOf(p.area);
+    if (floor < World.FLOOR_MIN || floor > World.FLOOR_REG_MAX) return this.toast(p, '2~11층에서만 등록할 수 있습니다.');
+    if (p.floor) return this.toast(p, '이미 ' + p.floor + '층에 등록되어 있습니다. 먼저 등록을 해제해 주세요.');
+    const r = await db.registerFloor(p.id, floor, World.FLOOR_CAP);
+    if (r.error === 'full') return this.alive(p) && this.toast(p, '이 층은 정원(' + World.FLOOR_CAP + '명)이 모두 찼습니다.');
+    if (r.error) return this.alive(p) && this.toast(p, '이미 다른 층에 등록되어 있습니다.');
+    p.floor = floor;
+    this.floors.get(floor).count++;
+    if (this.alive(p)) { this.send(p.ws, { t: 'me', floor }); this.toast(p, floor + '층에 등록했습니다.'); }
+    this.broadcastAll({ t: 'floors', floors: this.floorList() });
+  }
+
+  // 층 이름: 총관리자·사장·부장은 어느 층이든, 팀장은 자기가 등록한 층만 바꿀 수 있다. 12층은 총관리자·사장만.
+  async onFloorName(p, m) {
+    const floor = World.floorOf(p.area);
+    if (floor < World.FLOOR_MIN) return;
+    const allowed = this.isTop(p) || (floor !== 12 && (p.rank === 'manager' || (p.rank === 'lead' && p.floor === floor)));
+    if (!allowed) return this.toast(p, '이 층의 이름을 바꿀 권한이 없습니다.');
+    const name = typeof m.name === 'string' ? m.name.replace(/\s+/g, ' ').trim() : null;
+    if (name === null || !RE_FLOOR_NAME.test(name)) return this.toast(p, '층 이름은 한글, 영문, 숫자로 12자까지입니다.');
+    await db.setFloorName(floor, name);
+    await db.audit(p.id, 'floor_name', floor + '층 -> ' + name);
+    this.floors.get(floor).name = name;
+    if (this.alive(p)) this.toast(p, name ? floor + '층 이름을 "' + name + '"(으)로 바꿨습니다.' : floor + '층 이름을 지웠습니다.');
+    this.broadcastAll({ t: 'floors', floors: this.floorList() });
+  }
+
+  // 12층 비밀번호 설정/해제 (총관리자·사장만). 해시로만 저장한다.
+  async onFloorPass(p, m) {
+    if (!this.isTop(p)) return this.toast(p, '12층 비밀번호는 사장만 정할 수 있습니다.');
+    if (typeof m.pw !== 'string') return;
+    const f12 = this.floors.get(12);
+    if (m.pw === '') {
+      await db.setFloorPass(12, null);
+      await db.audit(p.id, 'floor12_pass', '해제');
+      f12.hash = null;
+      if (this.alive(p)) this.toast(p, '12층 비밀번호를 해제했습니다.');
+    } else {
+      if (m.pw.length < 4 || m.pw.length > 32) return this.toast(p, '비밀번호는 4~32자로 정해 주세요.');
+      const hash = await auth.hashPassword(m.pw);
+      await db.setFloorPass(12, hash);
+      await db.audit(p.id, 'floor12_pass', '설정');
+      f12.hash = hash;
+      for (const q of this.players.values()) q.unlocked12 = false;     // 바뀐 비밀번호로 다시 확인받게 한다
+      if (this.alive(p)) this.toast(p, '12층 비밀번호를 설정했습니다.');
+    }
+    this.broadcastAll({ t: 'floors', floors: this.floorList() });
   }
 
   tick() {

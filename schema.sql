@@ -9,3 +9,18 @@ CREATE TABLE IF NOT EXISTS users (
   banned      BOOLEAN NOT NULL DEFAULT FALSE,
   created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- 3단계: 층 등록, 층 이름, 12층 비밀번호(해시로만 저장), 감사 기록
+ALTER TABLE users ADD COLUMN IF NOT EXISTS floor INTEGER;
+CREATE TABLE IF NOT EXISTS floors (
+  floor      INTEGER PRIMARY KEY,
+  name       TEXT NOT NULL DEFAULT '',
+  pass_hash  TEXT
+);
+CREATE TABLE IF NOT EXISTS audit_log (
+  id      BIGSERIAL PRIMARY KEY,
+  at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+  actor   INTEGER,
+  action  TEXT NOT NULL,
+  detail  TEXT
+);

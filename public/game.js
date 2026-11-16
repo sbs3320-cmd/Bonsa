@@ -12,6 +12,7 @@ function bonsaBoot() {
     '이동: 화면 왼쪽 조이스틱으로 걷고, 화면을 드래그하면 시점이 돌아갑니다. PC에서는 WASD와 마우스 드래그를 씁니다.',
     '날씨: 바깥은 실제 대한민국 시각과 울산 날씨를 따라갑니다. 비나 눈이 오면 우산 버튼이 나타나요.',
     '엘리베이터: 층 사이는 엘리베이터로만 이동합니다. 타면 층 선택 화면이 뜨고, 이름이 등록된 층은 그 이름으로 보입니다.',
+    '층 안내판: 각 층 엘리베이터 옆 안내판에서 그 층에 등록하거나 등록을 해제할 수 있습니다.',
     '층 등록: 2~11층 중 한 곳에 입장 등록을 할 수 있습니다. 한 사람은 한 층에만 등록할 수 있어요.',
     '꾸미기: 등록한 층에서는 가구와 소품을 놓고, 옮기고, 돌리고, 지울 수 있습니다.',
     '게시판: 로비 전체 게시판은 누구나 읽고, 층 게시판은 그 층에 등록한 사원이 글을 씁니다.',
@@ -23,7 +24,7 @@ function bonsaBoot() {
     { t: '[공지] 본사에 오신 것을 환영합니다', m: '사장 · 오늘',
       b: '신규 입사자는 인턴으로 시작합니다. 안내 데스크에서 게임 방법을 들어 보세요.' },
     { t: '[공지] 엘리베이터 운행 안내', m: '부장 · 오늘',
-      b: '엘리베이터는 현재 점검 중이며 3단계 업데이트에서 2~12층 운행을 시작합니다.' }
+      b: '엘리베이터가 2~12층 운행을 시작했습니다. 2~11층 안내판에서 층 등록을 할 수 있습니다.' }
   ];
 
   /* ---------- 렌더러 ---------- */
@@ -547,6 +548,105 @@ function bonsaBoot() {
   })();
   lobby.visible = false;
 
+  /* ---------- 2~11층 사무실, 12층 사장실 (방 크기와 엘리베이터 위치는 로비와 같다) ---------- */
+  var office = new THREE.Group(), ceo = new THREE.Group();
+  scene.add(office); scene.add(ceo);
+  office.visible = false; ceo.visible = false;
+  var roomLight = new THREE.MeshBasicMaterial({ color: 0xfffbea });
+  function roomShell(g, floorMat, wall, wall2) {
+    var fl = new THREE.Mesh(new THREE.PlaneGeometry(LW, LD), floorMat);
+    fl.rotation.x = -Math.PI / 2; g.add(fl);
+    var ce = new THREE.Mesh(new THREE.PlaneGeometry(LW, LD), mat(0xf7f7f4));
+    ce.rotation.x = Math.PI / 2; ce.position.y = LH; g.add(ce);
+    box(LW, LH, 0.3, wall, 0, LH / 2, -LD / 2 - 0.15, g);
+    box(LW, LH, 0.3, wall, 0, LH / 2, LD / 2 + 0.15, g);
+    box(0.3, LH, LD, wall2, -LW / 2 - 0.15, LH / 2, 0, g);
+    box(0.3, LH, LD, wall2, LW / 2 + 0.15, LH / 2, 0, g);
+    box(LW, 0.25, 0.08, 0x6f6a62, 0, 0.125, -LD / 2 + 0.04, g);
+    box(LW, 0.25, 0.08, 0x6f6a62, 0, 0.125, LD / 2 - 0.04, g);
+    box(0.08, 0.25, LD, 0x6f6a62, -LW / 2 + 0.04, 0.125, 0, g);
+    box(0.08, 0.25, LD, 0x6f6a62, LW / 2 - 0.04, 0.125, 0, g);
+    [[-6, -4], [6, -4], [-6, 4], [6, 4], [0, 0]].forEach(function (p) {
+      var lp = new THREE.Mesh(new THREE.BoxGeometry(3.2, 0.08, 1.2), roomLight);
+      lp.position.set(p[0], LH - 0.05, p[1]); g.add(lp);
+    });
+    // 엘리베이터 문
+    var ex = W.ELEV.x, ez = -LD / 2 + 0.12;
+    box(3.2, 3.7, 0.24, 0x596375, ex, 1.85, ez, g);
+    box(1.35, 3.2, 0.1, 0xc9d0da, ex - 0.7, 1.6, ez + 0.14, g);
+    box(1.35, 3.2, 0.1, 0xc9d0da, ex + 0.7, 1.6, ez + 0.14, g);
+    var el = signPlane('엘리베이터', 0.45, { fs: 56, bg: '#1c2430', radius: 12 });
+    el.position.set(ex, 4.15, ez + 0.14); g.add(el);
+    // 층 안내판 (등록, 층 이름, 12층 비밀번호)
+    var kx = W.KIOSK[0], kz = W.KIOSK[1];
+    box(0.8, 1.05, 0.5, 0x39424f, kx, 0.525, kz, g);
+    var scr = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.5, 0.04), new THREE.MeshBasicMaterial({ color: 0x9fe0ff }));
+    scr.position.set(kx, 1.3, kz + 0.12); scr.rotation.x = -0.5; g.add(scr);
+    var kl = labelSprite('층 안내판', 0.42, { bg: 'rgba(20,28,40,0.78)', fs: 44 });
+    kl.position.set(kx, 2.1, kz); g.add(kl);
+    // 창문 (동쪽, 서쪽 벽)
+    [-LW / 2 + 0.03, LW / 2 - 0.03].forEach(function (wx0) {
+      [-5, 0, 5].forEach(function (wz) {
+        box(0.06, 2.2, 3.4, 0x8d96a3, wx0, 3.1, wz, g);
+        box(0.08, 2.0, 3.2, 0xbfe3f5, wx0, 3.1, wz, g);
+      });
+    });
+  }
+  (function buildOffice() {
+    roomShell(office, texMat(tileTex('#8fa3b8', '#7d90a5', LW / 2, LD / 2)), 0xf1f3f6, 0xe6eaef);
+    // 층 게시판 자리 (북쪽 벽 왼쪽). 글쓰기는 5단계에서.
+    box(4.6, 2.6, 0.12, 0x6b4f37, -6.5, 2.6, -LD / 2 + 0.08, office);
+    box(4.2, 2.2, 0.06, 0xd9b98a, -6.5, 2.6, -LD / 2 + 0.15, office);
+    var bl = signPlane('층 게시판', 0.45, { fs: 56, bg: '#1c2430', radius: 12 });
+    bl.position.set(-6.5, 4.25, -LD / 2 + 0.16); office.add(bl);
+  })();
+  (function buildCeo() {
+    roomShell(ceo, texMat(tileTex('#b98d5e', '#a57b4f', LW / 3, LD / 3)), 0xefe7da, 0xe5dccd);
+    var rug = new THREE.Mesh(new THREE.PlaneGeometry(7, 8), mat(0x8c2f3c));
+    rug.rotation.x = -Math.PI / 2; rug.position.set(0, 0.02, 1.2); ceo.add(rug);
+    box(4.2, 0.95, 1.4, 0x5b3d27, 0, 0.475, -3.6, ceo);                 // 사장 책상
+    box(4.5, 0.1, 1.7, 0x3d281a, 0, 1.0, -3.6, ceo);
+    box(0.9, 0.55, 0.05, 0x1c2430, 0.9, 1.45, -3.8, ceo); box(0.08, 0.2, 0.08, 0x39424f, 0.9, 1.15, -3.8, ceo);
+    box(0.5, 0.18, 0.12, 0xd4af37, -1.1, 1.14, -3.1, ceo);              // 명패
+    box(1.0, 0.5, 1.0, 0x2a2f38, 0, 0.45, -5.3, ceo); box(1.0, 1.5, 0.2, 0x2a2f38, 0, 1.2, -5.75, ceo);   // 의자
+    box(0.7, 4.2, 5, 0x5b3d27, -11.55, 2.1, -3, ceo);                   // 책장
+    [0.8, 1.9, 3.0].forEach(function (y, r) {
+      [0x2f6fed, 0xc0392b, 0x2f8f6f, 0xd4af37, 0x6b4f9a, 0x39424f].forEach(function (col, k) {
+        box(0.32, 0.8, 0.5, col, -11.3, y + 0.25, -5 + k * 0.72 + r * 0.1, ceo);
+      });
+    });
+    var sofa = new THREE.Group();
+    box(3, 0.55, 1.1, 0x4a3b34, 0, 0.3, 0, sofa); box(3, 0.9, 0.3, 0x3d302a, 0, 0.75, -0.42, sofa);
+    sofa.position.set(-7.5, 0, 4.5); sofa.rotation.y = Math.PI / 2; ceo.add(sofa);
+    box(1.6, 0.5, 1.6, 0x3d281a, -5.2, 0.25, 4.5, ceo);
+    var gPot = new THREE.CylinderGeometry(0.4, 0.3, 0.7, 12), gPlant = new THREE.IcosahedronGeometry(0.75, 1);
+    [[10.8, 7.8], [-10.8, 7.8]].forEach(function (p) {
+      var pot = new THREE.Mesh(gPot, mat(0xc98b5e)); pot.position.set(p[0], 0.35, p[1]); ceo.add(pot);
+      var pl = new THREE.Mesh(gPlant, mat(0x4c9a55)); pl.scale.y = 1.4; pl.position.set(p[0], 1.5, p[1]); ceo.add(pl);
+    });
+  })();
+  // 지금 있는 층의 번호와 이름을 북쪽 벽에 크게 붙인다 (층을 옮기거나 이름이 바뀌면 다시 만든다)
+  var floorSign = null;
+  function dropPlane(m) {
+    if (!m) return;
+    if (m.parent) m.parent.remove(m);
+    m.geometry.dispose(); if (m.material.map) m.material.map.dispose(); m.material.dispose();
+  }
+  var floors = {}, me = { r: 'intern', floor: null };
+  function floorLabel(n) {
+    if (n === 1) return '1층 로비';
+    var f = floors[n], name = f && f.name ? f.name : (n === 12 ? '사장실' : '');
+    return n + '층' + (name ? ' · ' + name : '');
+  }
+  function refreshFloorSign() {
+    dropPlane(floorSign); floorSign = null;
+    var n = W.floorOf(area);
+    if (n < 2) return;
+    floorSign = signPlane(floorLabel(n), 1.3, { fs: 110, padX: 44, padY: 14, bg: n === 12 ? '#3d281a' : '#2f6fed', radius: 20 });
+    floorSign.position.set(0, 4.2, -LD / 2 + 0.05);
+    (n === 12 ? ceo : office).add(floorSign);
+  }
+
   /* ---------- 플레이어 ---------- */
   var player = makeCharacter(BODY_COLORS[0], '[인턴] …');
   scene.add(player);
@@ -579,18 +679,24 @@ function bonsaBoot() {
   /* ---------- 장소 전환 (서버가 허락한 뒤에만 실행) ---------- */
   function applyArea(next, x, z) {
     area = next;
-    var inside = next === 'in';
-    outdoor.visible = !inside; lobby.visible = inside;
+    outdoor.visible = next === 'out'; lobby.visible = next === 'in';
+    ceo.visible = next === 'f12'; office.visible = !outdoor.visible && !lobby.visible && !ceo.visible;
     P.x = x; P.z = z;
-    $('place').textContent = inside ? '1층 로비' : '야외';
+    refreshPlace();
   }
-  function switchArea(next, x, z, list) {
+  function refreshPlace() {
+    var n = W.floorOf(area), t = n ? floorLabel(n) : '야외';
+    if ($('place').textContent !== t) $('place').textContent = t;
+    refreshFloorSign();
+  }
+  function switchArea(next, x, z, list, face) {
     lockUntil = performance.now() + 700;
     $('fade').classList.add('on');
     setTimeout(function () {
+      closeElev(); closeFinfo();
       applyArea(next, x, z);
-      if (next === 'in') { P.face = Math.PI; cam.yaw = 0; cam.pitch = 0.36; }
-      else { P.face = 0; cam.yaw = Math.PI; cam.pitch = 0.42; }
+      P.face = typeof face === 'number' ? face : (next === 'in' ? Math.PI : 0);
+      cam.yaw = next === 'out' ? Math.PI : 0; cam.pitch = next === 'out' ? 0.42 : 0.36;
       setOthers(list);
       $('fade').classList.remove('on');
     }, 260);
@@ -632,8 +738,89 @@ function bonsaBoot() {
     { x: W.NPCS[0][0], z: W.NPCS[0][1], r: 3.4, label: '말 걸기', run: function () { showDialog(npcs[0].name); } },
     { x: W.NPCS[1][0], z: W.NPCS[1][1], r: 3.4, label: '말 걸기', run: function () { showDialog(npcs[1].name); } },
     { x: -LW / 2, z: 0, r: 3.2, label: '게시판 보기', run: function () { uiOpen = true; $('board').style.display = 'flex'; } },
-    { x: 8.6, z: -LD / 2, r: 3, label: '엘리베이터', run: function () { toast('엘리베이터는 3단계에서 운행을 시작합니다.'); } }
+    { x: W.ELEV.x, z: W.ELEV.z, r: 3, label: '엘리베이터', run: function () { openElev(); } }
   ];
+  var floorSpots = [
+    { x: W.ELEV.x, z: W.ELEV.z, r: 3, label: '엘리베이터', run: function () { openElev(); } },
+    { x: W.KIOSK[0], z: W.KIOSK[1], r: 2.2, label: '층 안내판', run: function () { openFinfo(); } },
+    { x: -6.5, z: -LD / 2, r: 2.6, label: '층 게시판', run: function () { toast('층 게시판은 5단계에서 열립니다.'); } }
+  ];
+  var ceoSpots = floorSpots.slice(0, 2);
+
+  /* ---------- 엘리베이터와 층 안내판 ---------- */
+  function setFloors(list) {
+    if (!Array.isArray(list)) return;
+    list.forEach(function (f) { floors[f[0]] = { name: String(f[1] || ''), c: Number(f[2]) || 0, lock: !!f[3] }; });
+    refreshPlace();
+    if ($('elev').style.display === 'flex') renderElev();
+    if ($('finfo').style.display === 'flex') renderFinfo();
+  }
+  function isTop() { return me.r === 'owner' || me.r === 'ceo'; }
+  function renderElev() {
+    var box0 = $('floorList'), here = W.floorOf(area), n, b, sp;
+    while (box0.firstChild) box0.removeChild(box0.firstChild);
+    for (n = W.FLOOR_MAX; n >= 1; n--) {
+      b = document.createElement('button'); b.type = 'button';
+      b.appendChild(document.createTextNode(floorLabel(n)));           // 이름은 글자로만 넣는다
+      sp = document.createElement('span');
+      sp.textContent = n === here ? '현재 층' : n === 1 ? '' : n === 12 ? (floors[12] && floors[12].lock ? '잠김' : '')
+        : ((floors[n] ? floors[n].c : 0) + '/' + W.FLOOR_CAP + (me.floor === n ? ' · 내 층' : ''));
+      b.appendChild(sp);
+      if (n === here) { b.className = 'here'; b.disabled = true; }
+      else if (me.floor === n) b.className = 'mine';
+      b.setAttribute('data-floor', n);
+      box0.appendChild(b);
+    }
+  }
+  function openElev() { uiOpen = true; $('pwRow').style.display = 'none'; renderElev(); $('elev').style.display = 'flex'; }
+  function closeElev() { if ($('elev').style.display !== 'flex') return; $('elev').style.display = 'none'; $('pwIn').value = ''; uiOpen = false; }
+  $('floorList').addEventListener('click', function (e) {
+    var b = e.target.closest ? e.target.closest('button') : null;
+    if (!b || b.disabled) return;
+    $('pwRow').style.display = 'none';
+    sendMsg({ t: 'elev', to: Number(b.getAttribute('data-floor')) });
+  });
+  $('pwRow').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var v = $('pwIn').value; $('pwIn').value = '';
+    if (v) sendMsg({ t: 'elev', to: 12, pw: v });
+  });
+  $('elevClose').addEventListener('click', closeElev);
+  $('elev').addEventListener('click', function (e) { if (e.target === $('elev')) closeElev(); });
+
+  function renderFinfo() {
+    var n = W.floorOf(area), f = floors[n] || { name: '', c: 0, lock: false };
+    $('fiTitle').textContent = floorLabel(n);
+    var reg = $('fiReg'), canName;
+    if (n === 12) {
+      $('fiNote').textContent = '사장실입니다. 이 층에는 등록할 수 없습니다.';
+      reg.style.display = 'none';
+      canName = isTop();
+    } else {
+      $('fiNote').textContent = '등록 사원 ' + f.c + ' / ' + W.FLOOR_CAP + '명. 등록한 층에서는 게시판 글쓰기와 꾸미기를 할 수 있습니다(5·6단계). 한 사람은 한 층에만 등록할 수 있습니다.'
+        + (me.floor && me.floor !== n ? ' 지금은 ' + me.floor + '층에 등록되어 있습니다.' : '');
+      reg.style.display = '';
+      reg.textContent = me.floor === n ? '이 층 등록 해제' : me.floor ? me.floor + '층 등록 해제' : '이 층에 등록';
+      reg.className = me.floor ? 'btn ghost' : 'btn';
+      canName = isTop() || me.r === 'manager' || (me.r === 'lead' && me.floor === n);
+    }
+    $('fiNameRow').style.display = canName ? 'block' : 'none';
+    $('fiPassRow').style.display = n === 12 && isTop() ? 'block' : 'none';
+    $('fiPassNote').textContent = f.lock ? '지금 비밀번호가 걸려 있습니다.' : '지금은 누구나 들어올 수 있습니다.';
+    $('fiPassOff').style.display = f.lock ? '' : 'none';
+  }
+  function openFinfo() { uiOpen = true; $('fiName').value = (floors[W.floorOf(area)] || {}).name || ''; $('fiPass').value = ''; renderFinfo(); $('finfo').style.display = 'flex'; }
+  function closeFinfo() { if ($('finfo').style.display !== 'flex') return; $('finfo').style.display = 'none'; $('fiPass').value = ''; uiOpen = false; }
+  $('fiReg').addEventListener('click', function () { sendMsg({ t: 'freg', on: !me.floor }); });
+  $('fiNameRow').addEventListener('submit', function (e) { e.preventDefault(); sendMsg({ t: 'fname', name: $('fiName').value }); });
+  $('fiPassRow').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var v = $('fiPass').value; $('fiPass').value = '';
+    if (v) sendMsg({ t: 'fpass', pw: v });
+  });
+  $('fiPassOff').addEventListener('click', function () { sendMsg({ t: 'fpass', pw: '' }); });
+  $('fiClose').addEventListener('click', closeFinfo);
+  $('finfo').addEventListener('click', function (e) { if (e.target === $('finfo')) closeFinfo(); });
   var current = null;
   function doAction() { if (current && !uiOpen) current.run(); }
   $('act').addEventListener('click', doAction);
@@ -796,6 +983,8 @@ function bonsaBoot() {
         myId = m.id; retry = 0;
         player.children.forEach(function (c) { if (c.material === mat(BODY_COLORS[0])) c.material = mat(BODY_COLORS[myId % BODY_COLORS.length]); });
         setTag(player, tagOf(m.me.r, m.me.n));
+        me.r = m.me.r; me.floor = m.me.floor || null;
+        if (m.floors) setFloors(m.floors);
         player.userData.umb.children[0].material = umbMats[myId % umbMats.length];
         if (typeof m.now === 'number') clockOffset = m.now - Date.now();
         if (m.wx) setWeather(m.wx, true);
@@ -825,7 +1014,11 @@ function bonsaBoot() {
         if (m.id === myId) myUmb = !!m.on;
         else if (others[m.id]) others[m.id].umb = !!m.on;
         break;
-      case 'area': switchArea(m.area, m.x, m.z, m.players); break;
+      case 'area': switchArea(m.area, m.x, m.z, m.players, m.f); break;
+      case 'floors': setFloors(m.floors); break;
+      case 'me': me.floor = m.floor || null; if ($('finfo').style.display === 'flex') renderFinfo(); if ($('elev').style.display === 'flex') renderElev(); break;
+      case 'needpw': $('pwRow').style.display = 'block'; $('pwIn').value = ''; $('pwIn').focus(); break;
+      case 'toast': toast(m.m); break;
       case 'sys': logLine(m.m, true); break;
       case 'online': $('count').textContent = '접속 ' + m.n + '명'; break;
       case 'kick': stopped = true; setOthers([]); showAuth(m.m); break;
@@ -1169,9 +1362,12 @@ function bonsaBoot() {
         want = d < 6.5 ? Math.atan2(P.x - n.x, P.z - n.z) : 0;
         n.g.rotation.y = turn(n.g.rotation.y, want, Math.min(1, dt * 5));
       }
-      for (i = 0; i < spots.length; i++) {
-        d = Math.sqrt((P.x - spots[i].x) * (P.x - spots[i].x) + (P.z - spots[i].z) * (P.z - spots[i].z));
-        if (d < spots[i].r && d < best) { best = d; current = spots[i]; }
+    }
+    if (area !== 'out') {
+      var sp = area === 'in' ? spots : (area === 'f12' ? ceoSpots : floorSpots), si, sd, sbest = 1e9;
+      for (si = 0; si < sp.length; si++) {
+        sd = Math.sqrt((P.x - sp[si].x) * (P.x - sp[si].x) + (P.z - sp[si].z) * (P.z - sp[si].z));
+        if (sd < sp[si].r && sd < sbest) { sbest = sd; current = sp[si]; }
       }
     }
     var act = $('act');
@@ -1181,11 +1377,11 @@ function bonsaBoot() {
     } else act.style.display = 'none';
 
     // 3인칭 카메라
-    var dist = area === 'in' ? 5.6 : 8;
+    var dist = area !== 'out' ? 5.6 : 8;
     var h = Math.cos(cam.pitch) * dist;
     var cx = P.x + Math.sin(cam.yaw) * h, cz = P.z + Math.cos(cam.yaw) * h;
     var cyy = 1.3 + Math.sin(cam.pitch) * dist;
-    if (area === 'in') {
+    if (area !== 'out') {
       cx = Math.max(-LW / 2 + 0.4, Math.min(LW / 2 - 0.4, cx));
       cz = Math.max(-LD / 2 + 0.4, Math.min(LD / 2 - 0.4, cz));
       cyy = Math.min(LH - 0.4, cyy);

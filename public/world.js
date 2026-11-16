@@ -30,6 +30,28 @@
   colIn.push(c(8.6, 4.5, 1.1, 3), c(-8.6, 5.6, 3, 1.1), c(6.3, 4.5, 1.6, 1.6));   // 소파, 탁자
   PLANTS.forEach(function (p) { colIn.push(c(p[0], p[1], 0.9, 0.9)); });
 
+  // 2~12층. 방 크기는 로비와 같고, 엘리베이터도 같은 자리에 있다.
+  var FLOOR_MIN = 2, FLOOR_MAX = 12, FLOOR_REG_MAX = 11, FLOOR_CAP = 20;
+  var ELEV = { x: 8.6, z: -LD / 2 }, ELEV_OUT = { x: 8.6, z: -LD / 2 + 1.8 };
+  var KIOSK = [5.4, -8.3];                                       // 층 안내판
+  var colFloor = [c(KIOSK[0], KIOSK[1], 0.9, 0.7)];
+  var col12 = colFloor.concat([c(0, -3.6, 4.4, 1.5), c(0, -5.3, 1.1, 1.1),       // 사장 책상, 의자
+    c(-11.55, -3, 0.9, 5.2),                                                       // 책장
+    c(-7.5, 4.5, 1.1, 3), c(-5.2, 4.5, 1.6, 1.6),                                  // 소파, 탁자
+    c(10.8, 7.8, 0.9, 0.9), c(-10.8, 7.8, 0.9, 0.9)]);                             // 화분
+  // 장소 이름을 층 번호로: 'in' -> 1, 'f5' -> 5, 'out' -> 0
+  function floorOf(area) {
+    if (area === 'in') return 1;
+    var m = /^f(\d{1,2})$/.exec(area || ''), n = m ? Number(m[1]) : 0;
+    return n >= FLOOR_MIN && n <= FLOOR_MAX ? n : 0;
+  }
+  function areaOf(floor) { return floor === 1 ? 'in' : 'f' + floor; }
+  function nearElev(area, x, z, slack) {
+    if (!floorOf(area)) return false;
+    var dx = x - ELEV.x, dz = z - ELEV.z;
+    return Math.sqrt(dx * dx + dz * dz) < 3 + (slack || 0);
+  }
+
   function blocked(area, x, z) {
     var list, i, b;
     if (area === 'out') {
@@ -37,7 +59,7 @@
       list = colOut;
     } else {
       if (x < -LW / 2 + R || x > LW / 2 - R || z < -LD / 2 + R || z > LD / 2 - R) return true;
-      list = colIn;
+      list = area === 'in' ? colIn : (area === 'f12' ? col12 : colFloor);
     }
     for (i = 0; i < list.length; i++) {
       b = list[i];
@@ -55,5 +77,7 @@
   var SPAWN = { start: { x: 0, z: 24 }, in: { x: 0, z: 6.6 }, out: { x: 0, z: 9.5 } };
 
   return { LW: LW, LD: LD, LH: LH, R: R, SPEED: SPEED, TREES: TREES, SHOPS: SHOPS, SHOP_Z: SHOP_Z,
-    PLANTS: PLANTS, NPCS: NPCS, LAMPS: LAMPS, FLAG: FLAG, blocked: blocked, door: door, SPAWN: SPAWN };
+    PLANTS: PLANTS, NPCS: NPCS, LAMPS: LAMPS, FLAG: FLAG,
+    FLOOR_MIN: FLOOR_MIN, FLOOR_MAX: FLOOR_MAX, FLOOR_REG_MAX: FLOOR_REG_MAX, FLOOR_CAP: FLOOR_CAP,
+    ELEV: ELEV, ELEV_OUT: ELEV_OUT, KIOSK: KIOSK, floorOf: floorOf, areaOf: areaOf, nearElev: nearElev, blocked: blocked, door: door, SPAWN: SPAWN };
 });
