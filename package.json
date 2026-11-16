@@ -1,6 +1,6 @@
 {
   "name": "bonsa",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "본사 - 3D 소셜 샌드박스 (3단계: 엘리베이터, 2~12층, 층 등록)",
   "private": true,
   "main": "server/index.js",

@@ -16,6 +16,7 @@ const RANK_ORDER = ['intern', 'staff', 'deputy', 'lead', 'manager', 'ceo'];
 const RANK_KO = { intern: '인턴', staff: '사원', deputy: '부팀장', lead: '팀장', manager: '부장', ceo: '사장', owner: '총관리자' };
 const level = rank => rank === 'owner' ? RANK_ORDER.length : RANK_ORDER.indexOf(rank);
 const rankOf = user => config.superAdmin && user.username === config.superAdmin ? 'owner' : user.rank;
+const POST_TITLE = 40, POST_BODY = 500;
 const RE_FLOOR_NAME = /^[가-힣a-zA-Z0-9 ]{0,12}$/;
 
 class Game {
@@ -27,6 +28,7 @@ class Game {
       this.rooms['f' + n] = new Set();
       this.floors.set(n, { name: '', count: 0, hash: null });
     }
+    this.postLimit = auth.limiter(3, 60 * 1000);        // 글쓰기: 1분에 3개까지
     this.lockFail = auth.limiter(5, 10 * 60 * 1000);   // 12층 비밀번호: 10분 동안 5번 틀리면 잠금
     this.ticks = 0; this.lastOnline = 0;
     this.timer = setInterval(() => this.tick(), TICK_MS);
@@ -121,13 +123,15 @@ class Game {
     else if (m.t === 'chat') this.onChat(p, m);
     else if (m.t === 'area') this.onArea(p, m);
     else if (m.t === 'umb') this.onUmbrella(p, m);
-    else if (m.t === 'elev' || m.t === 'freg' || m.t === 'fname' || m.t === 'fpass' || m.t === 'who' || m.t === 'roster' || m.t === 'setrank') {
+    else if (m.t === 'elev' || m.t === 'freg' || m.t === 'fname' || m.t === 'fpass' || m.t === 'who' || m.t === 'roster' || m.t === 'setrank'
+      || m.t === 'posts' || m.t === 'post' || m.t === 'delpost') {
       // DB를 쓰는 요청은 한 사람당 한 번에 하나씩만 처리한다
       if (p.busy || !this.actOk(p)) return;
       p.busy = true;
       const run = m.t === 'elev' ? this.onElev(p, m) : m.t === 'freg' ? this.onFloorReg(p, m)
         : m.t === 'fname' ? this.onFloorName(p, m) : m.t === 'fpass' ? this.onFloorPass(p, m)
-        : m.t === 'who' ? this.onWho(p, m) : m.t === 'roster' ? this.onRoster(p) : this.onSetRank(p, m);
+        : m.t === 'who' ? this.onWho(p, m) : m.t === 'roster' ? this.onRoster(p) : m.t === 'setrank' ? this.onSetRank(p, m)
+        : m.t === 'posts' ? this.sendPosts(p) : m.t === 'post' ? this.onPost(p, m) : this.onDelPost(p, m);
       run.catch(e => { console.error(e); if (this.alive(p)) this.toast(p, '요청을 처리하지 못했습니다.'); })
         .then(() => { p.busy = false; });
     }
@@ -208,6 +212,52 @@ class Game {
       if (!World.nearElev(p.area, p.x, p.z, 0.8)) return;      // 확인하는 사이 자리를 떴으면 태우지 않는다
     }
     this.moveTo(p, World.areaOf(to), World.ELEV_OUT.x + (Math.random() - 0.5), World.ELEV_OUT.z, 0);
+  }
+
+  // ---- 게시판 ----
+  // 어느 게시판인지는 클라이언트가 고르지 않는다. 지금 서 있는 곳(1층 = 전체 게시판, 2~11층 = 그 층 게시판)으로 서버가 정한다.
+  boardOf(p) { const n = World.floorOf(p.area); return n >= 1 && n <= World.FLOOR_REG_MAX ? n : 0; }
+  // 쓰기: 전체 게시판은 부장·사장·총관리자, 층 게시판은 그 층에 등록한 사원(과 총관리자)
+  canWrite(p, board) { return board === 1 ? level(p.rank) >= level('manager') : (p.floor === board || p.rank === 'owner'); }
+  // 지우기: 글쓴이 본인, 부장 이상, 그 층에 등록한 팀장
+  canDelete(p, board, author) {
+    return author === p.id || level(p.rank) >= level('manager') || (board !== 1 && p.rank === 'lead' && p.floor === board);
+  }
+  async sendPosts(p) {
+    const board = this.boardOf(p);
+    if (!board) return;
+    const rows = await db.listPosts(board);
+    if (!this.alive(p) || this.boardOf(p) !== board) return;
+    this.send(p.ws, { t: 'posts', b: board, w: this.canWrite(p, board) ? 1 : 0,
+      list: rows.map(x => [x.id, x.title, x.body, x.nickname, rankOf(x), x.at, this.canDelete(p, board, x.author) ? 1 : 0]) });
+  }
+  async onPost(p, m) {
+    const board = this.boardOf(p);
+    if (!board) return;
+    if (!this.canWrite(p, board)) {
+      return this.toast(p, board === 1 ? '전체 게시판은 사장과 부장만 쓸 수 있습니다.' : '이 층에 등록한 사원만 쓸 수 있습니다.');
+    }
+    if (typeof m.title !== 'string' || typeof m.body !== 'string') return;
+    const title = m.title.replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim();
+    const body = m.body.replace(/\r/g, '').replace(/[\u0000-\u0009\u000b-\u001f\u007f]/g, ' ').replace(/\n{3,}/g, '\n\n').trim();
+    if (!title || title.length > POST_TITLE) return this.toast(p, '제목은 1~' + POST_TITLE + '자로 써 주세요.');
+    if (!body || body.length > POST_BODY) return this.toast(p, '내용은 1~' + POST_BODY + '자로 써 주세요.');
+    if (!this.postLimit.hit(p.id)) return this.toast(p, '글을 너무 자주 올리고 있습니다. 1분 뒤에 다시 시도해 주세요.');
+    await db.addPost(board, p.id, title, body);
+    if (!this.alive(p)) return;
+    this.send(p.ws, { t: 'posted' });
+    this.broadcast(p.area, { t: 'bnew', b: board });        // 같은 곳에서 게시판을 보고 있는 사람은 새로 받아 간다
+  }
+  async onDelPost(p, m) {
+    const id = Number(m.id), board = this.boardOf(p);
+    if (!Number.isInteger(id) || id < 1 || !board) return;
+    const post = await db.getPost(id);
+    if (!this.alive(p)) return;
+    if (!post || post.board !== board) return this.toast(p, '이미 지워졌거나 없는 글입니다.');
+    if (!this.canDelete(p, board, post.author)) return this.toast(p, '이 글을 지울 권한이 없습니다.');
+    await db.deletePost(id);
+    if (post.author !== p.id) await db.audit(p.id, 'post_delete', 'board ' + board + ' #' + id + ' ' + post.title);
+    this.broadcast(p.area, { t: 'bnew', b: board });
   }
 
   // 프로필 카드에 보여 줄 정보

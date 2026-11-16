@@ -35,6 +35,23 @@ function pgStore() {
       const r = await pool.query('SELECT * FROM users WHERE id = $1', [id]);
       return r.rows[0] || null;
     },
+    // 게시판: 최근 글 30개. 글쓴이의 현재 닉네임과 직급을 함께 꺼낸다.
+    async listPosts(board) {
+      const r = await pool.query(
+        `SELECT p.id, p.title, p.body, p.author, p.created_at, u.username, u.nickname, u.rank
+         FROM posts p JOIN users u ON u.id = p.author
+         WHERE p.board = $1 AND NOT p.deleted ORDER BY p.id DESC LIMIT 30`, [board]);
+      return r.rows.map(x => ({ id: Number(x.id), title: x.title, body: x.body, author: x.author, at: new Date(x.created_at).getTime(),
+        username: x.username, nickname: x.nickname, rank: x.rank }));
+    },
+    async addPost(board, author, title, body) {
+      await pool.query('INSERT INTO posts (board, author, title, body) VALUES ($1, $2, $3, $4)', [board, author, title, body]);
+    },
+    async getPost(id) {
+      const r = await pool.query('SELECT id, board, author, title FROM posts WHERE id = $1 AND NOT deleted', [id]);
+      return r.rows[0] || null;
+    },
+    async deletePost(id) { await pool.query('UPDATE posts SET deleted = TRUE WHERE id = $1', [id]); },
     // 사원 명부 (비밀번호 해시는 꺼내지 않는다)
     async listUsers() {
       const r = await pool.query('SELECT id, username, nickname, rank, floor FROM users WHERE banned = FALSE ORDER BY id LIMIT 300');
@@ -87,8 +104,8 @@ function pgStore() {
 }
 
 function memoryStore() {
-  const users = [], floors = [], log = [];
-  let seq = 0;
+  const users = [], floors = [], log = [], posts = [];
+  let seq = 0, postSeq = 0;
   function row(floor) {
     let f = floors.find(x => x.floor === floor);
     if (!f) { f = { floor, name: '', pass_hash: null }; floors.push(f); }
@@ -107,6 +124,15 @@ function memoryStore() {
     },
     async findByUsername(username) { return users.find(u => u.username === username) || null; },
     async findById(id) { return users.find(u => u.id === id) || null; },
+    async listPosts(board) {
+      return posts.filter(x => x.board === board && !x.deleted).slice(-30).reverse().map(x => {
+        const u = users.find(v => v.id === x.author);
+        return { id: x.id, title: x.title, body: x.body, author: x.author, at: x.at, username: u.username, nickname: u.nickname, rank: u.rank };
+      });
+    },
+    async addPost(board, author, title, body) { posts.push({ id: ++postSeq, board, author, title, body, at: Date.now(), deleted: false }); },
+    async getPost(id) { return posts.find(x => x.id === id && !x.deleted) || null; },
+    async deletePost(id) { const x = posts.find(y => y.id === id); if (x) x.deleted = true; },
     async listUsers() { return users.filter(u => !u.banned).map(u => ({ id: u.id, username: u.username, nickname: u.nickname, rank: u.rank, floor: u.floor })); },
     async setRank(uid, from, to) { const u = users.find(x => x.id === uid); if (!u || u.rank !== from) return false; u.rank = to; return true; },
     async demoteOtherCeos(uid) { const ids = []; users.forEach(u => { if (u.rank === 'ceo' && u.id !== uid) { u.rank = 'manager'; ids.push(u.id); } }); return ids; },

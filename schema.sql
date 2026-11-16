@@ -24,3 +24,15 @@ CREATE TABLE IF NOT EXISTS audit_log (
   action  TEXT NOT NULL,
   detail  TEXT
 );
+
+-- 5단계: 게시판. board 1 = 로비 전체 게시판, 2~11 = 층 게시판. 지운 글은 표시만 해 두고 남긴다.
+CREATE TABLE IF NOT EXISTS posts (
+  id          BIGSERIAL PRIMARY KEY,
+  board       INTEGER NOT NULL,
+  author      INTEGER NOT NULL REFERENCES users(id),
+  title       TEXT NOT NULL,
+  body        TEXT NOT NULL,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+  deleted     BOOLEAN NOT NULL DEFAULT FALSE
+);
+CREATE INDEX IF NOT EXISTS posts_board_idx ON posts (board, id DESC) WHERE NOT deleted;

@@ -87,6 +87,13 @@
   #board h2 { margin: 0 0 4px; font-size: 19px; color: #1c2430; }
   #board .note { font-size: 12px; color: #7a8494; margin-bottom: 12px; }
   .post { border-top: 1px solid #e8ecf3; padding: 12px 0; }
+  .post .b { white-space: pre-wrap; word-break: break-word; }
+  .post .del { border: 0; background: none; color: #c73a3a; font-family: inherit; font-size: 12px; padding: 6px 0 0; min-height: 32px; }
+  #bForm { margin-bottom: 12px; }
+  #bForm input, #bForm textarea { width: 100%; border: 1.5px solid #cfd6e1; border-radius: 10px; padding: 10px 12px;
+    font-size: 16px; color: #1c2430; font-family: inherit; margin-bottom: 8px; -webkit-user-select: text; user-select: text; }
+  #bForm input { min-height: 46px; padding: 0 12px; }
+  #bForm textarea { resize: none; display: block; }
   .post .t { font-size: 15px; font-weight: 700; color: #1c2430; }
   .post .m { font-size: 12px; color: #7a8494; margin: 3px 0 6px; }
   .post .b { font-size: 14px; line-height: 1.5; color: #333c4a; }
@@ -183,8 +190,13 @@
 
 <div id="board">
   <div class="card">
-    <h2>전체 게시판</h2>
-    <div class="note">누구나 읽을 수 있습니다. 글쓰기는 사장·부장만 가능하며 5단계에서 추가됩니다.</div>
+    <h2 id="bTitle">게시판</h2>
+    <div class="note" id="bNote"></div>
+    <form id="bForm" autocomplete="off" style="display:none">
+      <input id="bT" maxlength="40" placeholder="제목 (40자까지)">
+      <textarea id="bB" maxlength="500" rows="3" placeholder="내용 (500자까지)"></textarea>
+      <div style="text-align:right"><button class="btn" type="submit">글 올리기</button></div>
+    </form>
     <div id="posts"></div>
     <div style="text-align:right;margin-top:8px">
       <button class="btn ghost" id="bClose" type="button">닫기</button>

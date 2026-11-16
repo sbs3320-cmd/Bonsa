@@ -9,7 +9,7 @@ function bonsaBoot() {
   var NPC_GREETING = '반갑습니다, 본사입니다';
   var GUIDE = [
     '반갑습니다, 본사입니다. 게임 방법을 간단히 안내해 드릴게요.',
-    '이동: 화면 왼쪽 조이스틱으로 걷고, 화면을 드래그하면 시점이 돌아갑니다. PC에서는 WASD와 마우스 드래그를 씁니다.',
+    '이동: 폰에서는 화면 아무 곳이나 누른 채 끌면 걷고, 다른 손가락으로 끌면 시점이 돌아갑니다. PC에서는 WASD와 마우스 드래그를 씁니다.',
     '날씨: 바깥은 실제 대한민국 시각과 울산 날씨를 따라갑니다. 비나 눈이 오면 우산 버튼이 나타나요.',
     '엘리베이터: 층 사이는 엘리베이터로만 이동합니다. 타면 층 선택 화면이 뜨고, 이름이 등록된 층은 그 이름으로 보입니다.',
     '층 안내판: 각 층 엘리베이터 옆 안내판에서 그 층에 등록하거나 등록을 해제할 수 있습니다.',
@@ -20,12 +20,6 @@ function bonsaBoot() {
     '프로필: 캐릭터를 누르면 프로필이 열립니다. 화면 위 접속 인원을 누르면 사원 명부를 볼 수 있어요.',
     '이벤트: 사장이나 부장이 이벤트를 열면 참여해서 보상금을 받습니다. 돈으로 가구와 치장 아이템을 살 수 있어요.',
     '12층 사장실은 비밀번호가 걸려 있을 수 있습니다. 그럼 즐거운 회사 생활 되세요!'
-  ];
-  var POSTS = [
-    { t: '[공지] 본사에 오신 것을 환영합니다', m: '사장 · 오늘',
-      b: '신규 입사자는 인턴으로 시작합니다. 안내 데스크에서 게임 방법을 들어 보세요.' },
-    { t: '[공지] 엘리베이터 운행 안내', m: '부장 · 오늘',
-      b: '엘리베이터가 2~12층 운행을 시작했습니다. 2~11층 안내판에서 층 등록을 할 수 있습니다.' }
   ];
 
   /* ---------- 렌더러 ---------- */
@@ -694,7 +688,7 @@ function bonsaBoot() {
     lockUntil = performance.now() + 700;
     $('fade').classList.add('on');
     setTimeout(function () {
-      closeElev(); closeFinfo(); closeRoster(); closeProf();
+      closeElev(); closeFinfo(); closeRoster(); closeProf(); closeBoard();
       applyArea(next, x, z);
       P.face = typeof face === 'number' ? face : (next === 'in' ? Math.PI : 0);
       cam.yaw = next === 'out' ? Math.PI : 0; cam.pitch = next === 'out' ? 0.42 : 0.36;
@@ -724,27 +718,74 @@ function bonsaBoot() {
     if (dIdx >= GUIDE.length - 1) { $('dialog').style.display = 'none'; uiOpen = false; return; }
     dIdx++; renderDialog();
   });
-  POSTS.forEach(function (p) {
-    var d = document.createElement('div'); d.className = 'post';
-    ['t', 'm', 'b'].forEach(function (k) {
-      var e = document.createElement('div'); e.className = k; e.textContent = p[k]; d.appendChild(e);
+  /* ---------- 게시판: 로비는 전체 게시판, 2~11층은 그 층 게시판 (글은 항상 textContent 로만 넣는다) ---------- */
+  function pad2(v) { return (v < 10 ? '0' : '') + v; }
+  function kstStamp(ms) {
+    var d = new Date(ms + 9 * 3600000);
+    return pad2(d.getUTCMonth() + 1) + '.' + pad2(d.getUTCDate()) + ' ' + pad2(d.getUTCHours()) + ':' + pad2(d.getUTCMinutes());
+  }
+  function boardOpen() { return $('board').style.display === 'flex'; }
+  function renderPosts(m) {
+    if (!boardOpen() || !Array.isArray(m.list) || m.b !== W.floorOf(area)) return;
+    $('bForm').style.display = m.w ? 'block' : 'none';
+    $('bNote').textContent = m.b === 1 ? '누구나 읽을 수 있고, 글은 사장과 부장이 씁니다.'
+      : '누구나 읽을 수 있고, 글은 이 층에 등록한 사원이 씁니다.';
+    var box0 = $('posts');
+    while (box0.firstChild) box0.removeChild(box0.firstChild);
+    if (!m.list.length) {
+      var e0 = document.createElement('div'); e0.className = 'post';
+      var eb = document.createElement('div'); eb.className = 'b'; eb.textContent = '아직 글이 없습니다.'; e0.appendChild(eb);
+      box0.appendChild(e0); return;
+    }
+    m.list.forEach(function (p) {
+      var d = document.createElement('div'); d.className = 'post';
+      [['t', String(p[1])], ['m', tagOf(p[4], String(p[3])) + ' · ' + kstStamp(Number(p[5]))], ['b', String(p[2])]].forEach(function (k) {
+        var e = document.createElement('div'); e.className = k[0]; e.textContent = k[1]; d.appendChild(e);
+      });
+      if (p[6]) {
+        var del = document.createElement('button'); del.type = 'button'; del.className = 'del';
+        del.textContent = '삭제'; del.setAttribute('data-id', p[0]); d.appendChild(del);
+      }
+      box0.appendChild(d);
     });
-    $('posts').appendChild(d);
+  }
+  function openBoard() {
+    var n = W.floorOf(area);
+    uiOpen = true;
+    $('bTitle').textContent = n === 1 ? '전체 게시판' : floorLabel(n) + ' 게시판';
+    $('bNote').textContent = '불러오는 중…'; $('bForm').style.display = 'none';
+    while ($('posts').firstChild) $('posts').removeChild($('posts').firstChild);
+    $('board').style.display = 'flex';
+    sendMsg({ t: 'posts' });
+  }
+  $('bForm').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var t = $('bT').value.trim(), b = $('bB').value.trim();
+    if (!t || !b) { toast('제목과 내용을 모두 써 주세요.'); return; }
+    sendMsg({ t: 'post', title: t, body: b });
   });
-  function closeBoard() { $('board').style.display = 'none'; uiOpen = false; }
+  var delArmed = 0;
+  $('posts').addEventListener('click', function (e) {
+    var b = e.target.closest ? e.target.closest('button.del') : null;
+    if (!b) return;
+    var id = Number(b.getAttribute('data-id'));
+    if (delArmed !== id) { delArmed = id; b.textContent = '한 번 더 누르면 지워집니다'; return; }   // 실수로 지우지 않게 두 번 눌러야 한다
+    delArmed = 0; sendMsg({ t: 'delpost', id: id });
+  });
+  function closeBoard() { if (!boardOpen()) return; $('board').style.display = 'none'; uiOpen = false; }
   $('bClose').addEventListener('click', closeBoard);
   $('board').addEventListener('click', function (e) { if (e.target === $('board')) closeBoard(); });
 
   var spots = [
     { x: W.NPCS[0][0], z: W.NPCS[0][1], r: 3.4, label: '말 걸기', run: function () { showDialog(npcs[0].name); } },
     { x: W.NPCS[1][0], z: W.NPCS[1][1], r: 3.4, label: '말 걸기', run: function () { showDialog(npcs[1].name); } },
-    { x: -LW / 2, z: 0, r: 3.2, label: '게시판 보기', run: function () { uiOpen = true; $('board').style.display = 'flex'; } },
+    { x: -LW / 2, z: 0, r: 3.2, label: '게시판 보기', run: function () { openBoard(); } },
     { x: W.ELEV.x, z: W.ELEV.z, r: 3, label: '엘리베이터', run: function () { openElev(); } }
   ];
   var floorSpots = [
     { x: W.ELEV.x, z: W.ELEV.z, r: 3, label: '엘리베이터', run: function () { openElev(); } },
     { x: W.KIOSK[0], z: W.KIOSK[1], r: 2.2, label: '층 안내판', run: function () { openFinfo(); } },
-    { x: -6.5, z: -LD / 2, r: 2.6, label: '층 게시판', run: function () { toast('층 게시판은 5단계에서 열립니다.'); } }
+    { x: -6.5, z: -LD / 2, r: 2.6, label: '층 게시판', run: function () { openBoard(); } }
   ];
   var ceoSpots = floorSpots.slice(0, 2);
 
@@ -798,7 +839,7 @@ function bonsaBoot() {
       reg.style.display = 'none';
       canName = isTop();
     } else {
-      $('fiNote').textContent = '등록 사원 ' + f.c + ' / ' + W.FLOOR_CAP + '명. 등록한 층에서는 게시판 글쓰기와 꾸미기를 할 수 있습니다(5·6단계). 한 사람은 한 층에만 등록할 수 있습니다.'
+      $('fiNote').textContent = '등록 사원 ' + f.c + ' / ' + W.FLOOR_CAP + '명. 등록한 층에서는 게시판에 글을 쓸 수 있고, 꾸미기(6단계)도 할 수 있습니다. 한 사람은 한 층에만 등록할 수 있습니다.'
         + (me.floor && me.floor !== n ? ' 지금은 ' + me.floor + '층에 등록되어 있습니다.' : '');
       reg.style.display = '';
       reg.textContent = me.floor === n ? '이 층 등록 해제' : me.floor ? me.floor + '층 등록 해제' : '이 층에 등록';
@@ -1089,7 +1130,7 @@ function bonsaBoot() {
         setOthers(m.players);
         $('count').textContent = '접속 ' + m.online + '명';
         $('auth').style.display = 'none'; $('net').style.display = 'none';
-        if (!playing) logLine(TOUCH ? '화면 왼쪽을 누른 채 끌면 이동, 오른쪽을 끌면 시점 회전' : 'WASD 또는 왼쪽 조이스틱으로 이동, 화면을 드래그해 시점 회전');
+        if (!playing) logLine(TOUCH ? '화면 아무 곳이나 누른 채 끌면 이동, 다른 손가락으로 끌면 시점 회전' : 'WASD 또는 왼쪽 조이스틱으로 이동, 화면을 드래그해 시점 회전');
         playing = true;
         break;
       case 'join': addOther(m.p); break;
@@ -1124,6 +1165,9 @@ function bonsaBoot() {
         if ($('prof').style.display === 'flex') renderProf();
         break;
       case 'who': showProf(m); break;
+      case 'posts': renderPosts(m); break;
+      case 'posted': $('bT').value = ''; $('bB').value = ''; toast('글을 올렸습니다.'); break;
+      case 'bnew': if (boardOpen() && m.b === W.floorOf(area)) sendMsg({ t: 'posts' }); break;
       case 'roster': renderRoster(m.list); break;
       case 'sys': logLine(m.m, true); break;
       case 'online': $('count').textContent = '접속 ' + m.n + '명'; break;
@@ -1336,7 +1380,8 @@ function bonsaBoot() {
   stick.addEventListener('pointerup', joyEnd);
   stick.addEventListener('pointercancel', joyEnd);
 
-  // 터치 기기에서는 화면 왼쪽 절반을 누르면 그 자리에 조이스틱이 생긴다
+  // 터치 기기에서는 화면 어디든 처음 누른 자리에 조이스틱이 생긴다.
+  // 시점은 다른 손가락으로 끌어서 돌리거나, 조이스틱을 옆으로 밀면 그쪽으로 천천히 따라 돈다.
   var TOUCH = !!(window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
   if (TOUCH) document.body.classList.add('touch');
   function floatEnd(e) {
@@ -1348,7 +1393,7 @@ function bonsaBoot() {
   canvas.addEventListener('pointerdown', function (e) {
     if (chatOpen) { closeChat(); return; }
     tapStart(e);
-    if (e.pointerType === 'touch' && joy.id === null && playing && !uiOpen && e.clientX < window.innerWidth * 0.5) {
+    if (e.pointerType === 'touch' && joy.id === null && playing && !uiOpen) {
       joy.id = e.pointerId;
       stick.style.left = (e.clientX - 64) + 'px'; stick.style.top = (e.clientY - 64) + 'px'; stick.style.bottom = 'auto';
       stick.style.display = 'block';
@@ -1374,7 +1419,7 @@ function bonsaBoot() {
   document.addEventListener('contextmenu', function (e) { e.preventDefault(); });
 
   var keys = {};
-  function typing(e) { return e.target && e.target.tagName === 'INPUT'; }
+  function typing(e) { return e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA'); }
   window.addEventListener('keydown', function (e) {
     if (typing(e)) return;
     keys[e.code] = true;
@@ -1403,6 +1448,7 @@ function bonsaBoot() {
     var mag = Math.sqrt(ix * ix + iy * iy);
     if (mag > 1) { ix /= mag; iy /= mag; mag = 1; }
     var moving = playing && mag > 0.12 && !uiOpen && !chatOpen && now > lockUntil;
+    if (moving && TOUCH && joy.id !== null) cam.yaw -= joy.x * dt * 1.1;
     if (moving) {
       var sy = Math.sin(cam.yaw), cy = Math.cos(cam.yaw);
       var vx = (-sy * iy + cy * ix), vz = (-cy * iy - sy * ix);
