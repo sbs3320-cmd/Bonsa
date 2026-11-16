@@ -56,7 +56,8 @@
   /* ---------- 도우미 ---------- */
   var matCache = {};
   function mat(color) {
-    if (!matCache[color]) matCache[color] = new THREE.MeshLambertMaterial({ color: color });
+    // 색을 화면 출력 방식에 맞게 바꿔 넣어야 물 빠진 듯 뿌옇게 보이지 않는다
+    if (!matCache[color]) matCache[color] = new THREE.MeshLambertMaterial({ color: new THREE.Color(color).convertSRGBToLinear() });
     return matCache[color];
   }
   function box(w, h, d, color, x, y, z, parent) {
@@ -149,7 +150,7 @@
   var gUmbTop = new THREE.ConeGeometry(1.05, 0.4, 12, 1, true);
   var gUmbPole = new THREE.CylinderGeometry(0.025, 0.025, 1.5, 6);
   var UMB_COLORS = [0xe5534b, 0x3b82c4, 0xf2b441, 0x3fa56b, 0x8e6bd1, 0xf08aa8];
-  var umbMats = UMB_COLORS.map(function (c) { return new THREE.MeshLambertMaterial({ color: c, side: THREE.DoubleSide }); });
+  var umbMats = UMB_COLORS.map(function (c) { return new THREE.MeshLambertMaterial({ color: new THREE.Color(c).convertSRGBToLinear(), side: THREE.DoubleSide }); });
   var BODY_COLORS = [0x6fa8ff, 0xf2a65a, 0x7fc8a9, 0xe58fb1, 0xb39ddb, 0xf0d264, 0x80cbc4, 0xef9a9a];
   function setTag(g, text) {
     dropSprite(g.userData.tag);
@@ -774,6 +775,7 @@
     E.chipAt = 0;
   }
   function kstHours() { return ((Date.now() + clockOffset + 9 * 3600000) % 86400000) / 3600000; }
+  function lin(v) { return Math.pow(v, 2.2); }
   function mix3(a, b, t) { return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t]; }
   var C_NIGHT = [0.035, 0.05, 0.13], C_DAY = [0.62, 0.83, 0.96], C_TWI = [0.97, 0.62, 0.4],
     C_GREY_N = [0.08, 0.09, 0.12], C_GREY_D = [0.62, 0.67, 0.72], C_IN = [0.17, 0.2, 0.26];
@@ -844,7 +846,7 @@
     if (E.flash > 0) sky = mix3(sky, [0.9, 0.92, 1], E.flash * 0.6);
 
     scene.background.setRGB(sky[0], sky[1], sky[2]);
-    scene.fog.color.setRGB(sky[0], sky[1], sky[2]);
+    scene.fog.color.setRGB(lin(sky[0]), lin(sky[1]), lin(sky[2]));
     scene.fog.near = 45 - 33 * E.fog - 15 * E.wet; scene.fog.far = 110 - 66 * E.fog - 28 * E.wet;
 
     var sunDir = arcDir((h - sr) / (ss - sr)), nh = h < sr ? h + 24 : h, moonDir = arcDir((nh - ss) / (sr + 24 - ss));
@@ -871,7 +873,7 @@
     var dark = Math.max(1 - dayF, E.cover * 0.45);
     env.windows[0].emissiveIntensity = env.windows[1].emissiveIntensity = clamp01(dark * 1.3 - 0.2) * 0.95;
     var lampOn = clamp01((dark - 0.45) / 0.25), lc = mix3([0.6, 0.64, 0.69], [1, 0.93, 0.7], lampOn);
-    env.lampMat.color.setRGB(lc[0], lc[1], lc[2]);
+    env.lampMat.color.setRGB(lin(lc[0]), lin(lc[1]), lin(lc[2]));
     for (i = 0; i < env.lampGlows.length; i++) {
       env.lampGlows[i].material.opacity = lampOn * 0.9; env.lampGlows[i].visible = lampOn > 0.02;
       env.lampPools[i].material.opacity = lampOn * 0.3; env.lampPools[i].visible = lampOn > 0.02;
@@ -911,7 +913,7 @@
     }
     f.attr.needsUpdate = true;
     var fb = 0.3 + 0.7 * dayF;
-    env.flagMat.color.setRGB(0.18 * fb, 0.44 * fb, 0.93 * fb);
+    env.flagMat.color.setRGB(lin(0.18 * fb), lin(0.44 * fb), lin(0.93 * fb));
 
     if (rain.obj.visible) fall(rain, dt, 24 + E.rain * 8, w * 10, P.x, P.z, Math.floor(rain.n * clamp01(E.rain)), true);
     if (snow.obj.visible) fall(snow, dt, 2.4, 1 + w * 6, P.x, P.z, Math.floor(snow.n * clamp01(E.snow)), false);
