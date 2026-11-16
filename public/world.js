@@ -55,16 +55,33 @@
   // ---- 꾸미기 가구 ----
   // w, d: 차지하는 칸 수(1칸 = 1m). solid: 지나갈 수 없음. seats: 앉는 자리(가구 기준 좌표, 앞쪽이 +z).
   var FURN = {
-    desk:  { n: '책상', w: 2, d: 1, solid: true },
-    chair: { n: '의자', w: 1, d: 1, solid: true, seats: [[0, 0.02]] },
-    sofa:  { n: '소파', w: 2, d: 1, solid: true, seats: [[-0.48, 0.05], [0.48, 0.05]] },
-    table: { n: '탁자', w: 1, d: 1, solid: true },
-    shelf: { n: '책장', w: 2, d: 1, solid: true },
-    plant: { n: '화분', w: 1, d: 1, solid: true },
-    lamp:  { n: '스탠드', w: 1, d: 1, solid: true },
-    wall:  { n: '칸막이', w: 2, d: 1, solid: true },
-    rug:   { n: '러그', w: 3, d: 2, solid: false }
+    desk:  { n: '책상', w: 2, d: 1, solid: true, price: 50 },
+    chair: { n: '의자', w: 1, d: 1, solid: true, price: 20, seats: [[0, 0.02]] },
+    sofa:  { n: '소파', w: 2, d: 1, solid: true, price: 80, seats: [[-0.48, 0.05], [0.48, 0.05]] },
+    table: { n: '탁자', w: 1, d: 1, solid: true, price: 30 },
+    shelf: { n: '책장', w: 2, d: 1, solid: true, price: 60 },
+    plant: { n: '화분', w: 1, d: 1, solid: true, price: 20 },
+    lamp:  { n: '스탠드', w: 1, d: 1, solid: true, price: 30 },
+    wall:  { n: '칸막이', w: 2, d: 1, solid: true, price: 20 },
+    rug:   { n: '러그', w: 3, d: 2, solid: false, price: 40 }
   };
+  // 상점에서 사는 치장. slot: 몸 색(color) 또는 모자(hat). 가격 단위는 코인.
+  var COSM = {
+    c_sky:    { slot: 'color', n: '하늘색', hex: 0x6fa8ff, price: 50 },
+    c_orange: { slot: 'color', n: '귤색', hex: 0xf2a65a, price: 50 },
+    c_mint:   { slot: 'color', n: '민트', hex: 0x7fc8a9, price: 50 },
+    c_pink:   { slot: 'color', n: '분홍', hex: 0xe58fb1, price: 50 },
+    c_purple: { slot: 'color', n: '연보라', hex: 0xb39ddb, price: 50 },
+    c_lemon:  { slot: 'color', n: '레몬', hex: 0xf0d264, price: 50 },
+    c_white:  { slot: 'color', n: '하양', hex: 0xf4f4f0, price: 120 },
+    c_black:  { slot: 'color', n: '먹색', hex: 0x4a4f57, price: 120 },
+    h_cap:    { slot: 'hat', n: '야구 모자', price: 80 },
+    h_beanie: { slot: 'hat', n: '털모자', price: 80 },
+    h_party:  { slot: 'hat', n: '고깔모자', price: 60 },
+    h_ribbon: { slot: 'hat', n: '리본', price: 60 },
+    h_crown:  { slot: 'hat', n: '왕관', price: 500 }
+  };
+  var START_MONEY = 200, EVENT_REWARD_MAX = 1000, EVENT_OPEN_MAX = 10;
   var FURN_CAP = 60;                                   // 층마다 놓을 수 있는 개수 (모바일 성능)
   // 가구를 놓을 수 없는 자리: 엘리베이터 앞, 안내판 앞, 게시판 앞
   var KEEP_OUT = [c(8.6, -7.4, 4.4, 3.2), c(KIOSK[0], -7.4, 1.8, 1.6), c(-6.5, -8.2, 5, 1.6)];
@@ -135,6 +152,7 @@
   return { LW: LW, LD: LD, LH: LH, R: R, SPEED: SPEED, TREES: TREES, SHOPS: SHOPS, SHOP_Z: SHOP_Z,
     PLANTS: PLANTS, NPCS: NPCS, LAMPS: LAMPS, FLAG: FLAG,
     FLOOR_MIN: FLOOR_MIN, FLOOR_MAX: FLOOR_MAX, FLOOR_REG_MAX: FLOOR_REG_MAX, FLOOR_CAP: FLOOR_CAP,
+    COSM: COSM, START_MONEY: START_MONEY, EVENT_REWARD_MAX: EVENT_REWARD_MAX, EVENT_OPEN_MAX: EVENT_OPEN_MAX,
     FURN: FURN, FURN_CAP: FURN_CAP, furnSize: furnSize, snap: snap, furnRect: furnRect, furnOk: furnOk, seatPos: seatPos,
     ELEV: ELEV, ELEV_OUT: ELEV_OUT, KIOSK: KIOSK, floorOf: floorOf, areaOf: areaOf, nearElev: nearElev, blocked: blocked, door: door, SPAWN: SPAWN };
 });

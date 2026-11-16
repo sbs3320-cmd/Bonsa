@@ -52,3 +52,37 @@ CREATE TABLE IF NOT EXISTS furniture (
   owner   INTEGER REFERENCES users(id)
 );
 CREATE INDEX IF NOT EXISTS furniture_floor_idx ON furniture (floor);
+
+-- 7단계: 이벤트, 돈, 상점, 치장
+-- 시작 자금: 새로 가입하면 200코인. 이 단계 이전에 가입한 사람에게도 한 번만 200코인을 준다.
+ALTER TABLE users ALTER COLUMN money SET DEFAULT 200;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS color TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS hat TEXT;
+CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT);
+WITH first AS (INSERT INTO settings (key, value) VALUES ('starter_v1', 'done') ON CONFLICT DO NOTHING RETURNING key)
+UPDATE users SET money = money + 200 WHERE EXISTS (SELECT 1 FROM first);
+
+CREATE TABLE IF NOT EXISTS events (
+  id          BIGSERIAL PRIMARY KEY,
+  title       TEXT NOT NULL,
+  body        TEXT NOT NULL,
+  reward      INTEGER NOT NULL CHECK (reward > 0),
+  creator     INTEGER NOT NULL REFERENCES users(id),
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+  closed      BOOLEAN NOT NULL DEFAULT FALSE
+);
+-- 참가 신청과 보상. (event_id, user_id) 가 기본 키라서 한 사람이 같은 이벤트 보상을 두 번 받을 수 없다.
+CREATE TABLE IF NOT EXISTS event_entries (
+  event_id  BIGINT NOT NULL REFERENCES events(id),
+  user_id   INTEGER NOT NULL REFERENCES users(id),
+  status    TEXT NOT NULL DEFAULT 'applied',
+  judge     INTEGER,
+  paid_at   TIMESTAMPTZ,
+  PRIMARY KEY (event_id, user_id)
+);
+-- 산 치장 아이템
+CREATE TABLE IF NOT EXISTS user_items (
+  user_id  INTEGER NOT NULL REFERENCES users(id),
+  item     TEXT NOT NULL,
+  PRIMARY KEY (user_id, item)
+);

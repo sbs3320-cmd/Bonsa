@@ -18,7 +18,8 @@ function bonsaBoot() {
     '게시판: 로비 전체 게시판은 누구나 읽고, 층 게시판은 그 층에 등록한 사원이 글을 씁니다. 고정한 글은 게시판에 종이로 붙어요.',
     '직급: 인턴으로 시작해 사원, 부팀장, 팀장, 부장, 사장 순으로 올라갑니다. 팀장 이상이 아래 직급을 승진시킵니다.',
     '메뉴: 오른쪽 위 메뉴에서 프로필, 사원 명부, 게시판, 음악 설정, 로그아웃을 쓸 수 있어요. 캐릭터를 눌러도 프로필이 열립니다.',
-    '이벤트: 사장이나 부장이 이벤트를 열면 참여해서 보상금을 받습니다. 돈으로 가구와 치장 아이템을 살 수 있어요.',
+    '이벤트: 메뉴의 이벤트에서 참가 신청을 하면 부팀장 이상이 성공을 판정하고, 성공하면 코인을 받습니다.',
+    '상점: 메뉴의 상점에서 코인으로 몸 색과 모자를 사고, 꾸미기에서 가구를 삽니다. 처음에 200코인을 드려요.',
     '12층 사장실은 비밀번호가 걸려 있을 수 있습니다. 그럼 즐거운 회사 생활 되세요!'
   ];
 
@@ -217,8 +218,44 @@ function bonsaBoot() {
     pole.position.set(0.4, 1.85, 0.05); umb.add(pole);
     umb.visible = false; g.add(umb);
     g.userData.feet = feet; g.userData.arms = arms; g.userData.shadow = sh; g.userData.umb = umb;
+    g.userData.skin = [body, head, arms[0], arms[1]]; g.userData.hat = null;
     setTag(g, tagText);
     return g;
+  }
+  // 치장: 몸 색과 모자. 산 것이 없으면 번호에 따라 정해지는 기본 색을 쓴다.
+  var crownMat = new THREE.MeshLambertMaterial({ color: new THREE.Color(0xf0c419).convertSRGBToLinear(), side: THREE.DoubleSide });
+  function buildHat(key) {
+    var g = new THREE.Group(), m;
+    function add(geo, color, x, y, z) { m = new THREE.Mesh(geo, mat(color)); m.position.set(x, y, z); g.add(m); return m; }
+    if (key === 'h_cap') {
+      add(new THREE.SphereGeometry(0.42, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2), 0xd9483b, 0, 1.5, 0);
+      add(new THREE.BoxGeometry(0.5, 0.04, 0.34), 0xb83a2f, 0, 1.52, 0.5);
+    } else if (key === 'h_beanie') {
+      add(new THREE.SphereGeometry(0.43, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2), 0x3f6fb5, 0, 1.48, 0);
+      add(new THREE.CylinderGeometry(0.44, 0.44, 0.12, 16), 0xe8ecf3, 0, 1.5, 0);
+      add(new THREE.SphereGeometry(0.1, 10, 8), 0xe8ecf3, 0, 1.96, 0);
+    } else if (key === 'h_party') {
+      add(new THREE.ConeGeometry(0.22, 0.55, 14), 0xf2b441, 0, 2.04, 0);
+      add(new THREE.SphereGeometry(0.07, 8, 6), 0xd9483b, 0, 2.33, 0);
+    } else if (key === 'h_ribbon') {
+      add(new THREE.BoxGeometry(0.2, 0.16, 0.08), 0xf06292, 0.14, 1.8, 0.12).rotation.z = 0.5;
+      add(new THREE.BoxGeometry(0.2, 0.16, 0.08), 0xf06292, 0.34, 1.72, 0.12).rotation.z = -0.9;
+      add(new THREE.SphereGeometry(0.06, 8, 6), 0xd81b60, 0.24, 1.76, 0.14);
+    } else if (key === 'h_crown') {
+      add(new THREE.CylinderGeometry(0.27, 0.25, 0.18, 14, 1, true), 0xf0c419, 0, 1.86, 0).material = crownMat;
+      for (var i = 0; i < 6; i++) add(new THREE.ConeGeometry(0.07, 0.16, 6), 0xf0c419, Math.cos(i * Math.PI / 3) * 0.25, 2.02, Math.sin(i * Math.PI / 3) * 0.25);
+      add(new THREE.SphereGeometry(0.05, 8, 6), 0xd9483b, 0, 1.88, 0.27);
+    } else return null;
+    return g;
+  }
+  function applyLook(g, id, c, h) {
+    var u = g.userData, item = Object.prototype.hasOwnProperty.call(W.COSM, c) ? W.COSM[c] : null;
+    var skin = mat(item && item.slot === 'color' ? item.hex : BODY_COLORS[id % BODY_COLORS.length]), i;
+    for (i = 0; i < u.skin.length; i++) u.skin[i].material = skin;
+    if (u.hatKey === h) return;
+    if (u.hat) { g.remove(u.hat); for (i = 0; i < u.hat.children.length; i++) u.hat.children[i].geometry.dispose(); }
+    u.hat = Object.prototype.hasOwnProperty.call(W.COSM, h) ? buildHat(h) : null; u.hatKey = h;
+    if (u.hat) g.add(u.hat);
   }
   // 걷는 동작과 우산 든 자세
   function pose(g, moving, walk, umbOn, sitting) {
@@ -718,6 +755,7 @@ function bonsaBoot() {
   function addOther(p) {
     if (others[p.id]) removeOther(p.id);
     var g = makeCharacter(BODY_COLORS[p.id % BODY_COLORS.length], tagOf(p.r, p.n), p.id);
+    applyLook(g, p.id, p.c, p.h);
     g.position.set(p.x, 0, p.z); g.rotation.y = p.f;
     scene.add(g);
     others[p.id] = { g: g, x: p.x, z: p.z, f: p.f, walk: 0, umb: !!p.u, n: p.n, r: p.r, sit: !!p.s };
@@ -752,7 +790,7 @@ function bonsaBoot() {
     lockUntil = performance.now() + 700;
     $('fade').classList.add('on');
     setTimeout(function () {
-      closeElev(); closeFinfo(); closeRoster(); closeProf(); closeBoard(); closeMenu(); closeDeco();
+      closeElev(); closeFinfo(); closeRoster(); closeProf(); closeBoard(); closeMenu(); closeDeco(); closeShop(); closeEvents();
       mySit = false;
       applyArea(next, x, z);
       setPapers(pins); setFurn(furn);
@@ -910,7 +948,7 @@ function bonsaBoot() {
   try { if (localStorage.getItem('bonsa_quality') === 'low') quality = 'low'; } catch (e) {}
   function applyQuality() { renderer.setPixelRatio(quality === 'low' ? 1 : Math.min(window.devicePixelRatio || 1, 2)); resize(); }
   function renderMenu() {
-    $('mnWho').textContent = tagOf(me.r, me.n || '') + (me.floor ? ' · ' + floorLabel(me.floor) + ' 등록' : ' · 등록한 층 없음');
+    $('mnWho').textContent = tagOf(me.r, me.n || '') + (me.floor ? ' · ' + floorLabel(me.floor) + ' 등록' : ' · 등록한 층 없음') + ' · ' + moneyText();
     $('mnBoardF').style.display = me.floor ? '' : 'none';
     $('mnBoardF').firstChild.nodeValue = me.floor ? floorLabel(me.floor) + ' 게시판' : '내 층 게시판';
     $('mnDeco').style.display = typeof canDeco === 'function' && canDeco() ? '' : 'none';
@@ -928,6 +966,8 @@ function bonsaBoot() {
   $('mnBoard1').addEventListener('click', function () { openBoard(1); });
   $('mnBoardF').addEventListener('click', function () { if (me.floor) openBoard(me.floor); });
   $('mnDeco').addEventListener('click', function () { closeMenu(); if (typeof openDeco === 'function') openDeco(); });
+  $('mnEvents').addEventListener('click', function () { closeMenu(); openEvents(); });
+  $('mnShop').addEventListener('click', function () { closeMenu(); openShop(); });
   $('mnBgm').addEventListener('click', function () {
     bgm.on = !bgm.on;
     try { localStorage.setItem('bonsa_bgm', bgm.on ? '1' : '0'); } catch (e) {}
@@ -1048,10 +1088,10 @@ function bonsaBoot() {
     var it = deco.sel ? furnItems[deco.sel] : null, n = 0, id, txt;
     if (deco.sel && !it) deco.sel = 0;
     for (id in furnItems) n++;
-    if (deco.type) txt = W.FURN[deco.type].n + ': 놓을 자리를 누르세요. 회전 단추로 방향을 바꿉니다 (지금 ' + deco.rot * 90 + '도).';
+    if (deco.type) txt = W.FURN[deco.type].n + '(' + W.FURN[deco.type].price + '코인): 놓을 자리를 누르세요. 회전 단추로 방향을 바꿉니다 (지금 ' + deco.rot * 90 + '도).';
     else if (it) txt = W.FURN[it.type].n + ' 선택됨: 옮길 자리를 누르거나 회전·삭제를 누르세요.';
     else txt = '아래에서 가구를 고르거나, 놓인 가구를 눌러 선택하세요.';
-    $('decoInfo').textContent = '가구 ' + n + '/' + W.FURN_CAP + ' · ' + txt;
+    $('decoInfo').textContent = '가구 ' + n + '/' + W.FURN_CAP + ' · ' + moneyText() + ' · ' + txt;
     var bs = $('decoTypes').children;
     for (var i = 0; i < bs.length; i++) bs[i].className = bs[i].getAttribute('data-type') === deco.type ? 'on' : '';
     $('dcRot').disabled = !deco.type && !it; $('dcDel').disabled = !it; $('dcNone').disabled = !deco.type && !it;
@@ -1061,7 +1101,7 @@ function bonsaBoot() {
     } else selMesh.visible = false;
   }
   Object.keys(W.FURN).forEach(function (k) {
-    var b = document.createElement('button'); b.type = 'button'; b.textContent = W.FURN[k].n; b.setAttribute('data-type', k);
+    var b = document.createElement('button'); b.type = 'button'; b.textContent = W.FURN[k].n + ' ' + W.FURN[k].price; b.setAttribute('data-type', k);
     $('decoTypes').appendChild(b);
   });
   function setTops(v) { for (var i = 0; i < roomTops.length; i++) roomTops[i].visible = v; }
@@ -1150,6 +1190,104 @@ function bonsaBoot() {
     }
     return found;
   }
+
+  /* ---------- 상점과 치장 (값과 보유 여부는 서버가 판정한다) ---------- */
+  function moneyText() { return '내 돈 ' + (me.money || 0) + '코인'; }
+  function shopOpen() { return $('shop').style.display === 'flex'; }
+  var buyArmed = '';
+  function renderShop(m) {
+    if (!shopOpen() || !Array.isArray(m.own)) return;
+    me.money = Number(m.money) || 0; buyArmed = '';
+    $('shNote').textContent = moneyText();
+    ['color', 'hat'].forEach(function (slot) {
+      var box0 = $(slot === 'color' ? 'shColors' : 'shHats'), worn = slot === 'color' ? m.c : m.h;
+      clear(box0);
+      function row(key, name, hex, right, cls) {
+        var b = document.createElement('button'), sp = document.createElement('span'), dot;
+        b.type = 'button'; b.setAttribute('data-item', key); b.setAttribute('data-slot', slot);
+        if (hex !== null) { dot = document.createElement('i'); dot.style.background = '#' + ('000000' + hex.toString(16)).slice(-6); b.appendChild(dot); }
+        b.appendChild(document.createTextNode(name)); sp.textContent = right; b.appendChild(sp);
+        if (cls) b.className = cls;
+        box0.appendChild(b);
+      }
+      row('', slot === 'color' ? '기본 색' : '모자 없음', null, worn ? '바꾸기' : '착용 중', worn ? '' : 'here');
+      Object.keys(W.COSM).forEach(function (k) {
+        var it = W.COSM[k];
+        if (it.slot !== slot) return;
+        var own = m.own.indexOf(k) >= 0;
+        row(k, it.n, slot === 'color' ? it.hex : null, worn === k ? '착용 중' : own ? '보유 · 착용하기' : it.price + '코인', worn === k ? 'here' : own ? 'mine' : '');
+        if (own) box0.lastChild.setAttribute('data-own', '1');
+      });
+    });
+  }
+  function shopClick(e) {
+    var b = e.target.closest ? e.target.closest('button') : null;
+    if (!b || b.className === 'here') return;
+    var key = b.getAttribute('data-item');
+    if (!key || b.getAttribute('data-own')) { sendMsg({ t: 'equip', slot: b.getAttribute('data-slot'), item: key }); return; }
+    if (buyArmed !== key) { buyArmed = key; b.lastChild.textContent = '한 번 더 누르면 삽니다'; return; }   // 실수로 사지 않게 두 번 눌러야 한다
+    buyArmed = ''; sendMsg({ t: 'buy', item: key });
+  }
+  $('shColors').addEventListener('click', shopClick); $('shHats').addEventListener('click', shopClick);
+  function openShop() { if (!playing || uiOpen) return; uiOpen = true; $('shNote').textContent = '불러오는 중…'; $('shop').style.display = 'flex'; sendMsg({ t: 'shop' }); }
+  function closeShop() { if (!shopOpen()) return; $('shop').style.display = 'none'; uiOpen = false; }
+  $('shClose').addEventListener('click', closeShop);
+  $('shop').addEventListener('click', function (e) { if (e.target === $('shop')) closeShop(); });
+
+  /* ---------- 이벤트: 사장·부장이 만들고, 누구나 참가 신청하고, 부팀장 이상이 성공 판정을 하면 서버가 보상을 준다 ---------- */
+  function eventsOpen() { return $('events').style.display === 'flex'; }
+  function renderEvents(m) {
+    if (!eventsOpen() || !Array.isArray(m.list)) return;
+    $('evForm').style.display = m.mk ? 'block' : 'none';
+    $('evR').max = m.max;
+    $('evNote').textContent = '참가 신청을 하면 부팀장 이상이 성공 여부를 판정합니다. 보상은 이벤트마다 한 번만 받습니다. ' + moneyText() + '.';
+    var box0 = $('evList'); clear(box0);
+    function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; }
+    if (!m.list.length) { var e0 = el('div', 'ev'); e0.appendChild(el('div', 'b', '진행 중인 이벤트가 없습니다.')); box0.appendChild(e0); return; }
+    m.list.forEach(function (ev) {
+      var d = el('div', 'ev'), acts = el('div', 'acts'), b;
+      d.appendChild(el('div', 't', String(ev[1])));
+      d.appendChild(el('div', 'm', '보상 ' + ev[3] + '코인 · 만든 사람 ' + String(ev[4])));
+      d.appendChild(el('div', 'b', String(ev[2])));
+      b = el('button', '', ev[5] === 2 ? '보상 받음' : ev[5] === 1 ? '신청함 · 판정 대기' : '참가 신청');
+      b.type = 'button'; b.disabled = ev[5] !== 0; b.setAttribute('data-act', 'join'); b.setAttribute('data-id', ev[0]); acts.appendChild(b);
+      if (ev[6]) { b = el('button', 'ghost', '이벤트 종료'); b.type = 'button'; b.setAttribute('data-act', 'close'); b.setAttribute('data-id', ev[0]); acts.appendChild(b); }
+      d.appendChild(acts);
+      (ev[7] || []).forEach(function (w) {
+        var r = el('div', 'who'); r.appendChild(el('span', '', '신청: ' + String(w[1])));
+        [['ok', '성공', ''], ['no', '반려', 'ghost']].forEach(function (k) {
+          var x = el('button', k[2], k[1]); x.type = 'button';
+          x.setAttribute('data-act', k[0]); x.setAttribute('data-id', ev[0]); x.setAttribute('data-uid', w[0]); r.appendChild(x);
+        });
+        d.appendChild(r);
+      });
+      box0.appendChild(d);
+    });
+  }
+  var closeArmed = 0;
+  $('evList').addEventListener('click', function (e) {
+    var b = e.target.closest ? e.target.closest('button') : null;
+    if (!b || b.disabled) return;
+    var act = b.getAttribute('data-act'), id = Number(b.getAttribute('data-id')), uid = Number(b.getAttribute('data-uid'));
+    if (act === 'join') sendMsg({ t: 'evjoin', id: id });
+    else if (act === 'ok') sendMsg({ t: 'evok', id: id, uid: uid });
+    else if (act === 'no') sendMsg({ t: 'evno', id: id, uid: uid });
+    else if (act === 'close') {
+      if (closeArmed !== id) { closeArmed = id; b.textContent = '한 번 더 누르면 종료됩니다'; return; }
+      closeArmed = 0; sendMsg({ t: 'evclose', id: id });
+    }
+  });
+  $('evForm').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var t = $('evT').value.trim(), b = $('evB').value.trim(), r = Number($('evR').value);
+    if (!t || !b || !r) { toast('제목, 내용, 보상을 모두 써 주세요.'); return; }
+    sendMsg({ t: 'evnew', title: t, body: b, reward: r });
+    $('evT').value = ''; $('evB').value = ''; $('evR').value = '';
+  });
+  function openEvents() { if (!playing || uiOpen) return; uiOpen = true; closeArmed = 0; $('evNote').textContent = '불러오는 중…'; clear($('evList')); $('events').style.display = 'flex'; sendMsg({ t: 'events' }); }
+  function closeEvents() { if (!eventsOpen()) return; $('events').style.display = 'none'; uiOpen = false; }
+  $('evClose').addEventListener('click', closeEvents);
+  $('events').addEventListener('click', function (e) { if (e.target === $('events')) closeEvents(); });
 
   /* ---------- 프로필 카드, 사원 명부, 승진·강등 (단추가 보여도 판정은 서버가 다시 한다) ---------- */
   var RANK_ORDER = ['intern', 'staff', 'deputy', 'lead', 'manager', 'ceo'];
@@ -1398,7 +1536,8 @@ function bonsaBoot() {
     switch (m.t) {
       case 'hello':
         myId = m.id; retry = 0;
-        player.children.forEach(function (c) { if (c.material === mat(BODY_COLORS[0])) c.material = mat(BODY_COLORS[myId % BODY_COLORS.length]); });
+        me.money = Number(m.me.money) || 0; me.c = m.me.c || ''; me.h = m.me.h || '';
+        applyLook(player, myId, me.c, me.h);
         setTag(player, tagOf(m.me.r, m.me.n));
         me.r = m.me.r; me.n = m.me.n; me.floor = m.me.floor || null;
         if (m.floors) setFloors(m.floors);
@@ -1451,6 +1590,14 @@ function bonsaBoot() {
       case 'bnew': if (boardOpen() && m.b === curBoard && !editId) sendMsg({ t: 'posts', b: curBoard }); break;
       case 'pins': if (m.b === W.floorOf(area)) setPapers(m.list); break;
       case 'furn': onFurn(m); break;
+      case 'money': me.money = Number(m.v) || 0; if (deco.on) renderDeco(); if (menuOpen()) renderMenu(); if (shopOpen()) $('shNote').textContent = moneyText(); break;
+      case 'look':
+        if (m.id === myId) { me.c = m.c || ''; me.h = m.h || ''; applyLook(player, myId, me.c, me.h); }
+        else if (others[m.id]) applyLook(others[m.id].g, m.id, m.c || '', m.h || '');
+        break;
+      case 'shop': renderShop(m); break;
+      case 'events': renderEvents(m); break;
+      case 'evdirty': if (eventsOpen()) sendMsg({ t: 'events' }); break;
       case 'sit':
         if (m.id === myId) { mySit = !!m.s; P.x = m.x; P.z = m.z; P.face = m.f; sent.x = P.x; sent.z = P.z; }
         else if (others[m.id]) { o = others[m.id]; o.sit = !!m.s; o.x = m.x; o.z = m.z; o.f = m.f; o.g.position.x = m.x; o.g.position.z = m.z; }

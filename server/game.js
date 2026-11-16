@@ -79,7 +79,7 @@ class Game {
     const msg = JSON.stringify(obj);
     for (const p of this.rooms[area]) if (p !== except && p.ws.readyState === 1) p.ws.send(msg);
   }
-  pub(p) { return { id: p.id, n: p.name, r: p.rank, x: p.x, z: p.z, f: p.f, u: p.umb ? 1 : 0, s: p.sit ? 1 : 0 }; }
+  pub(p) { return { id: p.id, n: p.name, r: p.rank, x: p.x, z: p.z, f: p.f, u: p.umb ? 1 : 0, s: p.sit ? 1 : 0, c: p.color || '', h: p.hat || '' }; }
   roster(area, except) {
     const list = [];
     for (const p of this.rooms[area]) if (p !== except) list.push(this.pub(p));
@@ -104,11 +104,12 @@ class Game {
       rank: rankOf(user),
       area: 'out', x: World.SPAWN.start.x + (Math.random() * 4 - 2), z: World.SPAWN.start.z + Math.random() * 2,
       f: Math.PI, dirty: false, lastMove: Date.now(), moveSec: 0, moveCount: 0, chatTimes: [],
+      money: Number(user.money) || 0, color: this.cosm(user.color, 'color'), hat: this.cosm(user.hat, 'hat'),
       umb: false, lastUmb: 0, sit: null, sitFrom: null, lastSit: 0, decoTimes: [], floor: user.floor || null, actTimes: [], busy: false, unlocked12: false
     };
     this.players.set(p.id, p);
     this.rooms[p.area].add(p);
-    this.send(ws, { t: 'hello', id: p.id, me: { n: p.name, r: p.rank, area: p.area, x: p.x, z: p.z, floor: p.floor },
+    this.send(ws, { t: 'hello', id: p.id, me: { n: p.name, r: p.rank, area: p.area, x: p.x, z: p.z, floor: p.floor, money: p.money, c: p.color || '', h: p.hat || '' },
       floors: this.floorList(), pins: this.areaPins(p.area),
       players: this.roster(p.area, p), online: this.players.size,
       now: Date.now(), wx: weather.get() });
@@ -134,7 +135,9 @@ class Game {
     else if (m.t === 'sit') this.onSit(p, m);
     else if (m.t === 'stand') this.onStand(p);
     else if (m.t === 'elev' || m.t === 'freg' || m.t === 'fname' || m.t === 'fpass' || m.t === 'who' || m.t === 'roster' || m.t === 'setrank'
-      || m.t === 'posts' || m.t === 'post' || m.t === 'delpost' || m.t === 'editpost' || m.t === 'pin' || m.t === 'deco') {
+      || m.t === 'posts' || m.t === 'post' || m.t === 'delpost' || m.t === 'editpost' || m.t === 'pin' || m.t === 'deco'
+      || m.t === 'shop' || m.t === 'buy' || m.t === 'equip' || m.t === 'events' || m.t === 'evnew' || m.t === 'evclose'
+      || m.t === 'evjoin' || m.t === 'evok' || m.t === 'evno') {
       // DB를 쓰는 요청은 한 사람당 한 번에 하나씩만 처리한다
       if (p.busy || !(m.t === 'deco' ? this.decoOk(p) : this.actOk(p))) return;
       p.busy = true;
@@ -142,7 +145,10 @@ class Game {
         : m.t === 'fname' ? this.onFloorName(p, m) : m.t === 'fpass' ? this.onFloorPass(p, m)
         : m.t === 'who' ? this.onWho(p, m) : m.t === 'roster' ? this.onRoster(p) : m.t === 'setrank' ? this.onSetRank(p, m)
         : m.t === 'posts' ? this.sendPosts(p, m) : m.t === 'post' ? this.onPost(p, m) : m.t === 'delpost' ? this.onDelPost(p, m)
-        : m.t === 'editpost' ? this.onEditPost(p, m) : m.t === 'pin' ? this.onPin(p, m) : this.onDeco(p, m);
+        : m.t === 'editpost' ? this.onEditPost(p, m) : m.t === 'pin' ? this.onPin(p, m) : m.t === 'deco' ? this.onDeco(p, m)
+        : m.t === 'shop' ? this.sendShop(p) : m.t === 'buy' ? this.onBuy(p, m) : m.t === 'equip' ? this.onEquip(p, m)
+        : m.t === 'events' ? this.sendEvents(p) : m.t === 'evnew' ? this.onEventNew(p, m) : m.t === 'evclose' ? this.onEventClose(p, m)
+        : m.t === 'evjoin' ? this.onEventJoin(p, m) : this.onEventJudge(p, m);
       run.catch(e => { console.error(e); if (this.alive(p)) this.toast(p, '요청을 처리하지 못했습니다.'); })
         .then(() => { p.busy = false; });
     }
@@ -227,6 +233,116 @@ class Game {
     this.moveTo(p, World.areaOf(to), World.ELEV_OUT.x + (Math.random() - 0.5), World.ELEV_OUT.z, 0);
   }
 
+  // ---- 돈, 상점, 치장 ----
+  cosm(key, slot) { return typeof key === 'string' && Object.prototype.hasOwnProperty.call(World.COSM, key) && World.COSM[key].slot === slot ? key : null; }
+  setMoney(p, v) { if (typeof v !== 'number') return; p.money = v; if (this.alive(p)) this.send(p.ws, { t: 'money', v }); }
+  async sendShop(p) {
+    const items = await db.listItems(p.id);
+    if (this.alive(p)) this.send(p.ws, { t: 'shop', money: p.money, own: items, c: p.color || '', h: p.hat || '' });
+  }
+  async onBuy(p, m) {
+    const key = m.item;
+    if (typeof key !== 'string' || !Object.prototype.hasOwnProperty.call(World.COSM, key)) return;
+    const it = World.COSM[key], r = await db.buyItem(p.id, key, it.price);      // 값은 서버가 가진 표에서만 읽는다
+    if (r.error === 'owned') return this.alive(p) && this.toast(p, '이미 가지고 있습니다.');
+    if (r.error) return this.alive(p) && this.toast(p, '코인이 모자랍니다. ' + it.n + '은(는) ' + it.price + '코인입니다.');
+    this.setMoney(p, r.money);
+    if (this.alive(p)) this.toast(p, it.n + '을(를) 샀습니다.');
+    await this.wear(p, it.slot, key);
+    await this.sendShop(p);
+  }
+  async onEquip(p, m) {
+    const slot = m.slot === 'hat' ? 'hat' : m.slot === 'color' ? 'color' : null;
+    if (!slot) return;
+    let key = null;
+    if (m.item) {                                           // 빈 값이면 벗기(기본 모습)
+      key = this.cosm(m.item, slot);
+      if (!key || !(await db.listItems(p.id)).includes(key)) return this.alive(p) && this.toast(p, '가지고 있지 않은 아이템입니다.');
+    }
+    await this.wear(p, slot, key);
+    await this.sendShop(p);
+  }
+  async wear(p, slot, key) {
+    if (slot === 'hat') p.hat = key; else p.color = key;
+    await db.setLook(p.id, p.color, p.hat);
+    if (this.alive(p)) this.broadcast(p.area, { t: 'look', id: p.id, c: p.color || '', h: p.hat || '' });
+  }
+
+  // ---- 이벤트 ----
+  // 만들기: 부장·사장·총관리자. 성공 판정: 부팀장부터 사장까지(와 총관리자). 보상은 서버가 한 사람에게 한 번만 준다.
+  canMakeEvent(p) { return level(p.rank) >= level('manager'); }
+  canJudge(p) { return level(p.rank) >= level('deputy'); }
+  async sendEvents(p) {
+    const [evs, ents] = await Promise.all([db.listEvents(), db.listEntries()]);
+    if (!this.alive(p)) return;
+    const judge = this.canJudge(p);
+    this.send(p.ws, { t: 'events', mk: this.canMakeEvent(p) ? 1 : 0, j: judge ? 1 : 0, max: World.EVENT_REWARD_MAX,
+      // [번호, 제목, 내용, 보상, 만든 사람, 내 상태(0 없음, 1 신청, 2 받음), 종료할 수 있나, 신청자 목록(판정자에게만)]
+      list: evs.map(e => {
+        const mine = ents.find(n => n.event === e.id && n.user === p.id);
+        return [e.id, e.title, e.body, e.reward, e.nickname, mine ? (mine.status === 'paid' ? 2 : 1) : 0,
+          e.creator === p.id || this.isTop(p) ? 1 : 0,
+          judge ? ents.filter(n => n.event === e.id && n.status === 'applied' && n.user !== p.id).map(n => [n.user, n.nickname]) : []];
+      }) });
+  }
+  eventsChanged() { this.broadcastAll({ t: 'evdirty' }); }
+  async onEventNew(p, m) {
+    if (!this.canMakeEvent(p)) return this.toast(p, '이벤트는 사장과 부장만 만들 수 있습니다.');
+    if (typeof m.title !== 'string' || typeof m.body !== 'string') return;
+    const title = m.title.replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim();
+    const body = m.body.replace(/\r/g, '').replace(/[\u0000-\u0009\u000b-\u001f\u007f]/g, ' ').replace(/\n{3,}/g, '\n\n').trim();
+    const reward = Number(m.reward);
+    if (!title || title.length > 40) return this.toast(p, '제목은 1~40자로 써 주세요.');
+    if (!body || body.length > 300) return this.toast(p, '내용은 1~300자로 써 주세요.');
+    if (!Number.isInteger(reward) || reward < 1 || reward > World.EVENT_REWARD_MAX) return this.toast(p, '보상은 1~' + World.EVENT_REWARD_MAX + '코인으로 정해 주세요.');
+    if ((await db.countOpenEvents()) >= World.EVENT_OPEN_MAX) return this.alive(p) && this.toast(p, '진행 중인 이벤트는 ' + World.EVENT_OPEN_MAX + '개까지입니다. 끝난 이벤트를 먼저 종료해 주세요.');
+    const id = await db.addEvent(title, body, reward, p.id);
+    await db.audit(p.id, 'event_new', '#' + id + ' ' + title + ' 보상 ' + reward);
+    if (this.alive(p)) this.toast(p, '이벤트를 만들었습니다.');
+    this.eventsChanged();
+  }
+  async openEvent(p, m) {
+    const id = Number(m.id);
+    if (!Number.isInteger(id) || id < 1) return null;
+    const ev = await db.getEvent(id);
+    if (!ev && this.alive(p)) this.toast(p, '이미 끝났거나 없는 이벤트입니다.');
+    return this.alive(p) ? ev : null;
+  }
+  async onEventClose(p, m) {
+    const ev = await this.openEvent(p, m);
+    if (!ev) return;
+    if (ev.creator !== p.id && !this.isTop(p)) return this.toast(p, '만든 사람과 사장만 종료할 수 있습니다.');
+    await db.closeEvent(ev.id);
+    await db.audit(p.id, 'event_close', '#' + ev.id + ' ' + ev.title);
+    this.eventsChanged();
+  }
+  async onEventJoin(p, m) {
+    const ev = await this.openEvent(p, m);
+    if (!ev) return;
+    if (!(await db.joinEvent(ev.id, p.id))) return this.alive(p) && this.toast(p, '이미 신청했거나 보상을 받은 이벤트입니다.');
+    if (this.alive(p)) this.toast(p, '참가 신청했습니다. 판정을 기다려 주세요.');
+    this.eventsChanged();
+  }
+  async onEventJudge(p, m) {
+    if (!this.canJudge(p)) return this.toast(p, '성공 판정은 부팀장 이상만 할 수 있습니다.');
+    const uid = Number(m.uid);
+    if (!Number.isInteger(uid) || uid < 1) return;
+    if (uid === p.id) return this.toast(p, '자기 자신은 판정할 수 없습니다.');
+    const ev = await this.openEvent(p, m);
+    if (!ev) return;
+    const q = this.players.get(uid);
+    if (m.t === 'evno') {
+      if (!(await db.rejectEntry(ev.id, uid))) return this.alive(p) && this.toast(p, '이미 처리된 신청입니다.');
+      if (q) this.toast(q, '"' + ev.title + '" 참가 신청이 반려되었습니다.');
+    } else {
+      const r = await db.awardEvent(ev.id, uid, p.id);
+      if (!r) return this.alive(p) && this.toast(p, '이미 처리된 신청입니다.');
+      if (q) { this.setMoney(q, r.money); this.toast(q, '"' + ev.title + '" 성공! ' + r.reward + '코인을 받았습니다.'); }
+      if (this.alive(p)) this.toast(p, '성공 처리하고 ' + r.reward + '코인을 지급했습니다.');
+    }
+    this.eventsChanged();
+  }
+
   // ---- 꾸미기 ----
   furnList(area) { return (this.furn.get(World.floorOf(area)) || []).map(x => [x.id, x.type, x.x, x.z, x.rot]); }
   rebuildCol(floor) {
@@ -285,7 +401,13 @@ class Game {
       await db.moveFurniture(old.id, it.x, it.z, it.rot);
       old.x = it.x; old.z = it.z; old.rot = it.rot;
     } else {
-      it.id = await db.addFurniture(floor, type, it.x, it.z, it.rot, p.id);
+      // 새로 놓을 때 값을 치른다. 돈이 모자라면 놓이지 않고, 저장에 실패하면 돌려준다.
+      const price = World.FURN[type].price, left = await db.spend(p.id, price);
+      if (left === null) return this.alive(p) && this.toast(p, '코인이 모자랍니다. ' + World.FURN[type].n + '은(는) ' + price + '코인입니다.');
+      try { it.id = await db.addFurniture(floor, type, it.x, it.z, it.rot, p.id); }
+      catch (e) { this.setMoney(p, await db.refund(p.id, price)); throw e; }
+      await db.audit(p.id, 'money', '가구 ' + type + ' -' + price);
+      this.setMoney(p, left);
       it.floor = floor;
       list.push(it);
     }

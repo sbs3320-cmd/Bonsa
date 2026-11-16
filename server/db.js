@@ -71,6 +71,82 @@ function pgStore() {
       return r.rowCount === 1;
     },
     async unpinPost(id) { await pool.query('UPDATE posts SET pinned = FALSE WHERE id = $1', [id]); },
+    // ---- 돈 ----
+    // 쓰기: 잔액이 모자라면 한 푼도 빠지지 않는다. 성공하면 남은 돈, 실패하면 null.
+    async spend(uid, amount) {
+      const r = await pool.query('UPDATE users SET money = money - $2 WHERE id = $1 AND money >= $2 RETURNING money', [uid, amount]);
+      return r.rows.length ? r.rows[0].money : null;
+    },
+    async refund(uid, amount) {
+      const r = await pool.query('UPDATE users SET money = money + $2 WHERE id = $1 RETURNING money', [uid, amount]);
+      return r.rows.length ? r.rows[0].money : null;
+    },
+    // ---- 상점 ----
+    async listItems(uid) {
+      const r = await pool.query('SELECT item FROM user_items WHERE user_id = $1', [uid]);
+      return r.rows.map(x => x.item);
+    },
+    // 구매: 아이템 기록과 돈 차감을 한 묶음으로 처리한다 (둘 중 하나만 되는 일이 없게)
+    async buyItem(uid, item, price) {
+      const c = await pool.connect();
+      try {
+        await c.query('BEGIN');
+        const ins = await c.query('INSERT INTO user_items (user_id, item) VALUES ($1, $2) ON CONFLICT DO NOTHING', [uid, item]);
+        if (ins.rowCount !== 1) { await c.query('ROLLBACK'); return { error: 'owned' }; }
+        const pay = await c.query('UPDATE users SET money = money - $2 WHERE id = $1 AND money >= $2 RETURNING money', [uid, price]);
+        if (!pay.rows.length) { await c.query('ROLLBACK'); return { error: 'poor' }; }
+        await c.query('INSERT INTO audit_log (actor, action, detail) VALUES ($1, $2, $3)', [uid, 'money', '구매 ' + item + ' -' + price]);
+        await c.query('COMMIT');
+        return { money: pay.rows[0].money };
+      } catch (e) { try { await c.query('ROLLBACK'); } catch (e2) {} throw e; } finally { c.release(); }
+    },
+    async setLook(uid, color, hat) { await pool.query('UPDATE users SET color = $2, hat = $3 WHERE id = $1', [uid, color, hat]); },
+    // ---- 이벤트 ----
+    async listEvents() {
+      const r = await pool.query(
+        `SELECT e.id, e.title, e.body, e.reward, e.creator, u.nickname FROM events e JOIN users u ON u.id = e.creator
+         WHERE NOT e.closed ORDER BY e.id DESC LIMIT 20`);
+      return r.rows.map(x => ({ id: Number(x.id), title: x.title, body: x.body, reward: x.reward, creator: x.creator, nickname: x.nickname }));
+    },
+    async listEntries() {
+      const r = await pool.query(
+        `SELECT n.event_id, n.user_id, n.status, u.nickname FROM event_entries n
+         JOIN events e ON e.id = n.event_id JOIN users u ON u.id = n.user_id WHERE NOT e.closed ORDER BY n.event_id, u.nickname`);
+      return r.rows.map(x => ({ event: Number(x.event_id), user: x.user_id, status: x.status, nickname: x.nickname }));
+    },
+    async countOpenEvents() { return (await pool.query('SELECT count(*)::int AS n FROM events WHERE NOT closed')).rows[0].n; },
+    async addEvent(title, body, reward, creator) {
+      const r = await pool.query('INSERT INTO events (title, body, reward, creator) VALUES ($1, $2, $3, $4) RETURNING id', [title, body, reward, creator]);
+      return Number(r.rows[0].id);
+    },
+    async getEvent(id) {
+      const r = await pool.query('SELECT id, title, reward, creator FROM events WHERE id = $1 AND NOT closed', [id]);
+      return r.rows[0] ? Object.assign(r.rows[0], { id: Number(r.rows[0].id) }) : null;
+    },
+    async closeEvent(id) { await pool.query('UPDATE events SET closed = TRUE WHERE id = $1', [id]); },
+    async joinEvent(eid, uid) {
+      const r = await pool.query('INSERT INTO event_entries (event_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [eid, uid]);
+      return r.rowCount === 1;
+    },
+    async rejectEntry(eid, uid) {
+      const r = await pool.query("DELETE FROM event_entries WHERE event_id = $1 AND user_id = $2 AND status = 'applied'", [eid, uid]);
+      return r.rowCount === 1;
+    },
+    // 성공 판정과 보상 지급을 한 묶음으로. '신청' 상태인 것만 '지급'으로 바꿀 수 있어서 두 번 눌러도 한 번만 나간다.
+    async awardEvent(eid, uid, judge) {
+      const c = await pool.connect();
+      try {
+        await c.query('BEGIN');
+        const ev = await c.query('SELECT reward FROM events WHERE id = $1 AND NOT closed FOR UPDATE', [eid]);
+        if (!ev.rows.length) { await c.query('ROLLBACK'); return null; }
+        const up = await c.query("UPDATE event_entries SET status = 'paid', judge = $3, paid_at = now() WHERE event_id = $1 AND user_id = $2 AND status = 'applied'", [eid, uid, judge]);
+        if (up.rowCount !== 1) { await c.query('ROLLBACK'); return null; }
+        const pay = await c.query('UPDATE users SET money = money + $2 WHERE id = $1 RETURNING money', [uid, ev.rows[0].reward]);
+        await c.query('INSERT INTO audit_log (actor, action, detail) VALUES ($1, $2, $3)', [judge, 'money', '이벤트 ' + eid + ' 보상 +' + ev.rows[0].reward + ' -> ' + uid]);
+        await c.query('COMMIT');
+        return { money: pay.rows[0].money, reward: ev.rows[0].reward };
+      } catch (e) { try { await c.query('ROLLBACK'); } catch (e2) {} throw e; } finally { c.release(); }
+    },
     // 가구
     async loadFurniture() {
       const r = await pool.query('SELECT id, floor, type, x, z, rot FROM furniture ORDER BY id');
@@ -134,8 +210,8 @@ function pgStore() {
 }
 
 function memoryStore() {
-  const users = [], floors = [], log = [], posts = [], furn = [];
-  let seq = 0, postSeq = 0, furnSeq = 0;
+  const users = [], floors = [], log = [], posts = [], furn = [], events = [], entries = [];
+  let seq = 0, postSeq = 0, furnSeq = 0, eventSeq = 0;
   function row(floor) {
     let f = floors.find(x => x.floor === floor);
     if (!f) { f = { floor, name: '', pass_hash: null }; floors.push(f); }
@@ -148,7 +224,7 @@ function memoryStore() {
       if (users.length >= maxUsers) return { error: 'full' };
       if (users.some(u => u.username === username)) return { error: 'username' };
       if (users.some(u => u.nickname === nickname)) return { error: 'nickname' };
-      const u = { id: ++seq, username, nickname, pass_hash: passHash, rank: 'intern', money: 0, banned: false, floor: null };
+      const u = { id: ++seq, username, nickname, pass_hash: passHash, rank: 'intern', money: 200, banned: false, floor: null, color: null, hat: null, items: [] };
       users.push(u);
       return { id: u.id };
     },
@@ -175,6 +251,37 @@ function memoryStore() {
       x.pinned = true; return true;
     },
     async unpinPost(id) { const x = posts.find(y => y.id === id); if (x) x.pinned = false; },
+    async spend(uid, amount) { const u = users.find(x => x.id === uid); if (!u || u.money < amount) return null; u.money -= amount; return u.money; },
+    async refund(uid, amount) { const u = users.find(x => x.id === uid); if (!u) return null; u.money += amount; return u.money; },
+    async listItems(uid) { const u = users.find(x => x.id === uid); return u ? u.items.slice() : []; },
+    async buyItem(uid, item, price) {
+      const u = users.find(x => x.id === uid);
+      if (u.items.includes(item)) return { error: 'owned' };
+      if (u.money < price) return { error: 'poor' };
+      u.money -= price; u.items.push(item); log.push({ actor: uid, action: 'money', detail: '구매 ' + item + ' -' + price });
+      return { money: u.money };
+    },
+    async setLook(uid, color, hat) { const u = users.find(x => x.id === uid); if (u) { u.color = color; u.hat = hat; } },
+    async listEvents() {
+      return events.filter(e => !e.closed).slice(-20).reverse().map(e => ({ id: e.id, title: e.title, body: e.body, reward: e.reward, creator: e.creator, nickname: users.find(u => u.id === e.creator).nickname }));
+    },
+    async listEntries() {
+      return entries.filter(n => events.some(e => e.id === n.event && !e.closed)).map(n => ({ event: n.event, user: n.user, status: n.status, nickname: users.find(u => u.id === n.user).nickname }));
+    },
+    async countOpenEvents() { return events.filter(e => !e.closed).length; },
+    async addEvent(title, body, reward, creator) { events.push({ id: ++eventSeq, title, body, reward, creator, closed: false }); return eventSeq; },
+    async getEvent(id) { return events.find(e => e.id === id && !e.closed) || null; },
+    async closeEvent(id) { const e = events.find(x => x.id === id); if (e) e.closed = true; },
+    async joinEvent(eid, uid) { if (entries.some(n => n.event === eid && n.user === uid)) return false; entries.push({ event: eid, user: uid, status: 'applied' }); return true; },
+    async rejectEntry(eid, uid) { const i = entries.findIndex(n => n.event === eid && n.user === uid && n.status === 'applied'); if (i < 0) return false; entries.splice(i, 1); return true; },
+    async awardEvent(eid, uid, judge) {
+      const e = events.find(x => x.id === eid && !x.closed), n = entries.find(x => x.event === eid && x.user === uid && x.status === 'applied');
+      if (!e || !n) return null;
+      n.status = 'paid'; n.judge = judge;
+      const u = users.find(x => x.id === uid); u.money += e.reward;
+      log.push({ actor: judge, action: 'money', detail: '이벤트 ' + eid + ' 보상 +' + e.reward + ' -> ' + uid });
+      return { money: u.money, reward: e.reward };
+    },
     async loadFurniture() { return furn.map(x => Object.assign({}, x)); },
     async addFurniture(floor, type, x, z, rot, owner) { furn.push({ id: ++furnSeq, floor, type, x, z, rot, owner }); return furnSeq; },
     async moveFurniture(id, x, z, rot) { const f = furn.find(y => y.id === id); if (f) { f.x = x; f.z = z; f.rot = rot; } },

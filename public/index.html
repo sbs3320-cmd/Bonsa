@@ -94,9 +94,21 @@
   #bPinRow { display: flex; align-items: center; gap: 8px; font-size: 13px; color: #333c4a; margin-bottom: 8px; }
   #bPinRow input { width: 20px; height: 20px; min-height: 0; margin: 0; }
   #menu { z-index: 4; }
+  .ev { border-top: 1px solid #e8ecf3; padding: 12px 0; }
+  .ev .t { font-weight: 700; color: #1c2430; font-size: 15px; }
+  .ev .m { font-size: 12px; color: #7a8494; margin: 3px 0 6px; }
+  .ev .b { font-size: 14px; color: #333c4a; line-height: 1.55; white-space: pre-wrap; word-break: break-word; }
+  .ev .acts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+  .ev .acts button, .ev .who button { min-height: 38px; padding: 0 12px; border: 0; border-radius: 10px; background: #2f6fed; color: #fff;
+    font-family: inherit; font-size: 13px; font-weight: 700; }
+  .ev .acts button.ghost, .ev .who button.ghost { background: #e8ecf3; color: #1c2430; }
+  .ev .acts button:disabled { background: #e8ecf3; color: #7a8494; }
+  .ev .who { display: flex; align-items: center; gap: 8px; margin-top: 6px; font-size: 14px; color: #1c2430; }
+  .ev .who span { flex: 1; }
+  .list button i { display: inline-block; width: 16px; height: 16px; border-radius: 50%; margin-right: 8px; vertical-align: -2px; border: 1px solid rgba(0,0,0,.15); }
   #menuBtn { pointer-events: auto; border: 0; font-family: inherit; min-height: 34px; font-weight: 700; font-size: 14px; }
-  #bForm { margin-bottom: 12px; }
-  #bForm input, #bForm textarea { width: 100%; border: 1.5px solid #cfd6e1; border-radius: 10px; padding: 10px 12px;
+  #bForm, #evForm { margin-bottom: 12px; }
+  #bForm input, #bForm textarea, #evForm textarea { width: 100%; border: 1.5px solid #cfd6e1; border-radius: 10px; padding: 10px 12px;
     font-size: 16px; color: #1c2430; font-family: inherit; margin-bottom: 8px; -webkit-user-select: text; user-select: text; }
   #bForm input { min-height: 46px; padding: 0 12px; }
   #bForm textarea { resize: none; display: block; }
@@ -244,6 +256,8 @@
       <button type="button" id="mnBoard1">전체 게시판</button>
       <button type="button" id="mnBoardF">내 층 게시판</button>
       <button type="button" id="mnDeco">꾸미기</button>
+      <button type="button" id="mnEvents">이벤트</button>
+      <button type="button" id="mnShop">상점</button>
     </div>
     <div class="sec"><b>설정</b>
       <div class="list" style="margin-top:8px">
@@ -316,6 +330,34 @@
     <div class="note" id="rsNote">불러오는 중…</div>
     <div id="rsList" class="list"></div>
     <div style="text-align:right;margin-top:12px"><button class="btn ghost" id="rsClose" type="button">닫기</button></div>
+  </div>
+</div>
+
+<div id="events" class="modal">
+  <div class="card">
+    <h2>이벤트</h2>
+    <div class="note" id="evNote">불러오는 중…</div>
+    <form id="evForm" autocomplete="off" style="display:none">
+      <input id="evT" maxlength="40" placeholder="이벤트 제목 (40자까지)">
+      <textarea id="evB" maxlength="300" rows="2" placeholder="무엇을 하면 성공인지 (300자까지)"></textarea>
+      <div class="row" style="margin-top:0">
+        <input id="evR" type="number" inputmode="numeric" min="1" max="1000" placeholder="보상 코인">
+        <button class="btn" type="submit">이벤트 만들기</button>
+      </div>
+    </form>
+    <div id="evList"></div>
+    <div style="text-align:right;margin-top:8px"><button class="btn ghost" id="evClose" type="button">닫기</button></div>
+  </div>
+</div>
+
+<div id="shop" class="modal">
+  <div class="card">
+    <h2>상점</h2>
+    <div class="note" id="shNote">불러오는 중…</div>
+    <div class="sec"><b>몸 색</b><div id="shColors" class="list" style="margin-top:8px"></div></div>
+    <div class="sec"><b>모자</b><div id="shHats" class="list" style="margin-top:8px"></div></div>
+    <div class="note" style="margin:12px 0 0">가구는 꾸미기에서 놓을 때 값이 빠집니다.</div>
+    <div style="text-align:right;margin-top:8px"><button class="btn ghost" id="shClose" type="button">닫기</button></div>
   </div>
 </div>
 
