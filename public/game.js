@@ -39,6 +39,14 @@ function bonsaBoot() {
   var sun = new THREE.DirectionalLight(0xffffff, 0.75);
   sun.position.set(18, 40, 26);
   scene.add(sun);
+  // 해 그림자: 내 캐릭터 주변 60m 사각형만 그림자 지도에 담아 가볍게 한다. 화질 '낮음'에서는 끈다.
+  var shadowsOn = false;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  sun.castShadow = true;
+  sun.shadow.mapSize.set(Math.min(window.innerWidth, window.innerHeight) < 700 ? 1024 : 2048, Math.min(window.innerWidth, window.innerHeight) < 700 ? 1024 : 2048);
+  (function (c) { c.left = -30; c.right = 30; c.top = 30; c.bottom = -30; c.near = 5; c.far = 150; c.updateProjectionMatrix(); })(sun.shadow.camera);
+  sun.shadow.bias = -0.0006; sun.shadow.normalBias = 0.04;
+  scene.add(sun.target);
 
   function resize() {
     var w = window.innerWidth, h = window.innerHeight;
@@ -76,10 +84,10 @@ function bonsaBoot() {
   function rnd() { seed = (seed * 16807) % 2147483647; return seed / 2147483647; }
   function grassTex(rx, ry) {
     return patternTexture(128, function (x, n) {
-      x.fillStyle = '#86c56f'; x.fillRect(0, 0, n, n);
-      for (var i = 0; i < 420; i++) {
-        x.fillStyle = ['#7bbb66', '#93cf7c', '#74b060', '#9ad684'][i % 4];
-        x.fillRect(rnd() * n, rnd() * n, 2, 3 + rnd() * 3);
+      x.fillStyle = '#62a14a'; x.fillRect(0, 0, n, n);
+      for (var i = 0; i < 1100; i++) {
+        x.fillStyle = ['#578f40', '#6daf53', '#4f8a3b', '#79ba5c', '#5c9a45'][i % 5];
+        x.fillRect(rnd() * n, rnd() * n, 1.5, 2 + rnd() * 4);
       }
     }, rx, ry);
   }
@@ -91,6 +99,50 @@ function bonsaBoot() {
     }, rx, ry);
   }
   function texMat(tex) { return new THREE.MeshLambertMaterial({ map: tex }); }
+  // 움직이지 않는 물체를 재질별로 하나로 합친다. 그리는 횟수(드로우 콜)가 크게 줄어 폰에서 빨라진다.
+  // userData.dyn 이 붙은 것(흔들리는 나뭇잎, 깃발, 구름)과 그 아래는 건드리지 않는다.
+  var mInv = new THREE.Matrix4(), mRel = new THREE.Matrix4();
+  function joinArrays(list) {
+    var n = 0, o = 0, out, i;
+    for (i = 0; i < list.length; i++) n += list[i].length;
+    out = new Float32Array(n);
+    for (i = 0; i < list.length; i++) { out.set(list[i], o); o += list[i].length; }
+    return out;
+  }
+  function mergeStatic(root, deep) {
+    root.updateMatrixWorld(true);
+    mInv.copy(root.matrixWorld).invert();
+    var groups = {};
+    (function walk(o) {
+      o.children.slice().forEach(function (ch) {
+        if (ch.userData.dyn) return;
+        if (ch.isMesh && !ch.isInstancedMesh && !Array.isArray(ch.material) && ch.geometry.attributes.uv && ch.geometry.attributes.normal && !ch.geometry.attributes.color) {
+          var k = ch.material.uuid + '|' + ch.castShadow + '|' + ch.receiveShadow;
+          (groups[k] = groups[k] || []).push(ch);
+        }
+        if (deep) walk(ch);
+      });
+    })(root);
+    Object.keys(groups).forEach(function (k) {
+      var list = groups[k];
+      if (list.length < 2) return;
+      var pos = [], nor = [], uv = [];
+      list.forEach(function (m) {
+        var g = m.geometry.index ? m.geometry.toNonIndexed() : m.geometry.clone();
+        mRel.multiplyMatrices(mInv, m.matrixWorld); g.applyMatrix4(mRel);
+        pos.push(g.attributes.position.array); nor.push(g.attributes.normal.array); uv.push(g.attributes.uv.array);
+        g.dispose(); m.parent.remove(m);
+      });
+      var geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.BufferAttribute(joinArrays(pos), 3));
+      geo.setAttribute('normal', new THREE.BufferAttribute(joinArrays(nor), 3));
+      geo.setAttribute('uv', new THREE.BufferAttribute(joinArrays(uv), 2));
+      geo.computeBoundingSphere();
+      var mm = new THREE.Mesh(geo, list[0].material);
+      mm.castShadow = list[0].castShadow; mm.receiveShadow = list[0].receiveShadow;
+      root.add(mm);
+    });
+  }
   function rrect(ctx, x, y, w, h, r) {
     ctx.beginPath();
     ctx.moveTo(x + r, y);
@@ -243,6 +295,7 @@ function bonsaBoot() {
     g.userData.feet = feet; g.userData.arms = arms; g.userData.shadow = sh; g.userData.umb = umb;
     g.userData.skin = wool; g.userData.hat = null;
     g.userData.detail = detail; g.userData.far = false;
+    g.traverse(function (o) { if (o.isMesh && o !== sh) o.castShadow = true; });
     setTag(g, tagText);
     return g;
   }
@@ -296,7 +349,7 @@ function bonsaBoot() {
     u.arms[0].position.z = 0.02 - s * 0.15;
     if (umbOn) u.arms[1].position.set(0.44, 1.12, 0.14); else u.arms[1].position.set(0.52, 0.78, 0.02 + s * 0.15);
     u.umb.visible = umbOn;
-    u.shadow.position.y = 0.03 - g.position.y; u.shadow.visible = !sitting;
+    u.shadow.position.y = 0.03 - g.position.y; u.shadow.visible = !sitting && !shadowsOn;
     if (u.tag) u.tag.position.y = umbOn ? 3.05 : 2.25;
     if (u.bubble) u.bubble.position.y = umbOn ? 3.7 : 2.9;
   }
@@ -308,20 +361,52 @@ function bonsaBoot() {
 
   var env = { trees: [], clouds: [], lampGlows: [], lampPools: [] };   // 시간·날씨에 따라 바뀌는 것들
   (function buildOutdoor() {
-    var ground = new THREE.Mesh(new THREE.PlaneGeometry(200, 200), texMat(grassTex(70, 70)));
-    ground.rotation.x = -Math.PI / 2; outdoor.add(ground);
-    var path = new THREE.Mesh(new THREE.PlaneGeometry(5, 34), texMat(tileTex('#d9d2c1', '#bdb5a2', 5, 34)));
-    path.rotation.x = -Math.PI / 2; path.position.set(0, 0.02, 23); outdoor.add(path);
-    var plaza = new THREE.Mesh(new THREE.PlaneGeometry(22, 5), texMat(tileTex('#d9d2c1', '#bdb5a2', 22, 5)));
-    plaza.rotation.x = -Math.PI / 2; plaza.position.set(0, 0.02, 8.5); outdoor.add(plaza);
+    // 땅: 잔디 무늬 위에 넓은 얼룩(꼭짓점 색)을 겹쳐 반복 무늬가 덜 보이게 한다
+    var gGround = new THREE.PlaneGeometry(200, 200, 64, 64), gpos = gGround.attributes.position, gcol = [], gi, gx, gy, nz;
+    for (gi = 0; gi < gpos.count; gi++) {
+      gx = gpos.getX(gi); gy = gpos.getY(gi);
+      nz = 0.5 + 0.28 * Math.sin(gx * 0.13 + 1.3) * Math.cos(gy * 0.11 - 0.4) + 0.22 * Math.sin(gx * 0.037 - gy * 0.053 + 2.1);
+      gcol.push(0.8 + nz * 0.26, 0.86 + nz * 0.16, 0.74 + nz * 0.14);
+    }
+    gGround.setAttribute('color', new THREE.Float32BufferAttribute(gcol, 3));
+    var ground = new THREE.Mesh(gGround, new THREE.MeshLambertMaterial({ map: grassTex(70, 70), vertexColors: true }));
+    ground.rotation.x = -Math.PI / 2; ground.userData.rcv = true; outdoor.add(ground);
+    var pave = tileTex('#c4b9a5', '#a39983', 1, 1);
+    var path = new THREE.Mesh(new THREE.PlaneGeometry(5, 34), texMat(pave.clone()));
+    path.material.map.repeat.set(5, 34); path.material.map.needsUpdate = true;
+    path.rotation.x = -Math.PI / 2; path.position.set(0, 0.02, 23); path.userData.rcv = true; outdoor.add(path);
+    var plaza = new THREE.Mesh(new THREE.PlaneGeometry(22, 5), texMat(pave.clone()));
+    plaza.material.map.repeat.set(22, 5); plaza.material.map.needsUpdate = true;
+    plaza.rotation.x = -Math.PI / 2; plaza.position.set(0, 0.02, 8.5); plaza.userData.rcv = true; outdoor.add(plaza);
+    // 길 가장자리 돌 (발목 아래 높이라 걷는 데는 걸리지 않는다)
+    var curb = 0x8f887a;
+    box(0.22, 0.1, 29, curb, -2.6, 0.05, 25.5, outdoor); box(0.22, 0.1, 29, curb, 2.6, 0.05, 25.5, outdoor);
+    box(8.6, 0.1, 0.22, curb, -6.8, 0.05, 11.1, outdoor); box(8.6, 0.1, 0.22, curb, 6.8, 0.05, 11.1, outdoor);
+    box(0.22, 0.1, 5.2, curb, -11.1, 0.05, 8.5, outdoor); box(0.22, 0.1, 5.2, curb, 11.1, 0.05, 8.5, outdoor);
 
-    // 멀리 보이는 언덕 (안개에 섞여 원경이 된다)
-    var gHill = new THREE.ConeGeometry(1, 1, 8);
-    for (var hI = 0; hI < 14; hI++) {
-      var ang = hI / 14 * Math.PI * 2 + 0.3, rad = 82 + (hI % 3) * 7;
-      var hill = new THREE.Mesh(gHill, mat(hI % 2 ? 0x6fa27a : 0x7fb087));
-      hill.scale.set(20 + (hI % 4) * 5, 10 + (hI % 5) * 3, 20 + (hI % 3) * 6);
-      hill.position.set(Math.cos(ang) * rad, hill.scale.y / 2 - 0.5, Math.sin(ang) * rad); outdoor.add(hill);
+    // 하늘: 지평선은 밝고 위로 갈수록 짙어지는 둥근 하늘. 해 쪽은 살짝 환하다. (색은 envTick 이 시간·날씨대로 바꾼다)
+    env.skyMat = new THREE.ShaderMaterial({
+      uniforms: { top: { value: new THREE.Color() }, bottom: { value: new THREE.Color() }, sunDir: { value: new THREE.Vector3(0, 1, 0) },
+        sunCol: { value: new THREE.Color(1, 0.95, 0.8) }, sunAmt: { value: 0 } },
+      vertexShader: 'varying vec3 vDir; void main() { vDir = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+      fragmentShader: 'uniform vec3 top; uniform vec3 bottom; uniform vec3 sunDir; uniform vec3 sunCol; uniform float sunAmt; varying vec3 vDir;' +
+        'void main() { vec3 d = normalize(vDir); float h = clamp(d.y, 0.0, 1.0);' +
+        'vec3 c = mix(bottom, top, smoothstep(0.0, 0.6, h));' +
+        'float s = max(dot(d, normalize(sunDir)), 0.0);' +
+        'c += sunCol * (pow(s, 6.0) * 0.18 + pow(s, 60.0) * 0.35) * sunAmt;' +
+        'gl_FragColor = vec4(c, 1.0); }',
+      side: THREE.BackSide, depthWrite: false, fog: false
+    });
+    env.sky = new THREE.Mesh(new THREE.SphereGeometry(195, 24, 12), env.skyMat);
+    env.sky.frustumCulled = false; env.sky.renderOrder = -10; env.sky.userData.ns = true; outdoor.add(env.sky);
+
+    // 멀리 보이는 둥근 언덕 (안개에 섞여 원경이 된다)
+    var gHill = new THREE.SphereGeometry(1, 18, 8, 0, Math.PI * 2, 0, Math.PI / 2);
+    for (var hI = 0; hI < 16; hI++) {
+      var ang = hI / 16 * Math.PI * 2 + 0.3, rad = 84 + (hI % 3) * 8;
+      var hill = new THREE.Mesh(gHill, mat(hI % 2 ? 0x6a9f5e : 0x79ab69));
+      hill.scale.set(22 + (hI % 4) * 6, 7 + (hI % 5) * 2.5, 18 + (hI % 3) * 6);
+      hill.rotation.y = -ang; hill.position.set(Math.cos(ang) * rad, -1, Math.sin(ang) * rad); hill.userData.ns = true; outdoor.add(hill);
     }
 
     // 12층 건물: 창문은 텍스처로 그리고, 밤에는 불 켜진 창만 따로 빛나게 한다
@@ -364,6 +449,15 @@ function bonsaBoot() {
     box(2.2, 1.1, 2.2, 0xaab3bf, 4.5, 37.25, -3, outdoor);
     var ant = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 5, 6), mat(0x6b7480));
     ant.position.set(5.5, 39.2, 2); outdoor.add(ant);
+    // 층마다 바깥으로 살짝 튀어나온 띠와 세로 기둥: 그림자가 지면서 건물에 입체감이 생긴다
+    for (var lv = 1; lv < 12; lv++) box(16.5, 0.16, 12.5, 0xeef1f5, 0, lv * 3, 0, outdoor);
+    [-1, 1].forEach(function (sd) {
+      for (var fi = 1; fi < 6; fi++) box(0.16, 32, 0.36, 0xdfe4ea, -8 + fi * 16 / 6, 20, sd * 6.12, outdoor);
+      for (fi = 1; fi < 4; fi++) box(0.36, 32, 0.16, 0xdfe4ea, sd * 8.12, 20, -6 + fi * 3, outdoor);
+    });
+    var tank = new THREE.Mesh(new THREE.CylinderGeometry(1.1, 1.1, 1.8, 16), mat(0xc9d0da));
+    tank.position.set(-4.2, 39.1, 3.2); outdoor.add(tank);
+    [[-4.9, 2.5], [-3.5, 2.5], [-4.9, 3.9], [-3.5, 3.9]].forEach(function (q) { box(0.12, 1.0, 0.12, 0x6b7480, q[0], 37.2, q[1], outdoor); });
 
     // 정문, 차양, 간판
     box(4.2, 3.6, 0.5, 0x4a5566, 0, 1.8, 6.1, outdoor);
@@ -414,27 +508,36 @@ function bonsaBoot() {
 
     // 나무: 잎 덩어리 여러 개를 겹치고, 바람에 흔들리도록 잎 부분만 따로 묶는다
     var gTrunk = new THREE.CylinderGeometry(0.16, 0.34, 2.4, 8);
-    var gLeaf = new THREE.IcosahedronGeometry(1, 1);
-    var gCone = new THREE.ConeGeometry(1, 1, 9);
-    var GREENS = [0x4c9a55, 0x5fb062, 0x3f8a4f, 0x6cbb6a];
+    var gRoot = new THREE.CylinderGeometry(0.34, 0.55, 0.3, 8);
+    var gBranch = new THREE.CylinderGeometry(0.05, 0.09, 0.9, 6);
+    var gLeaf = new THREE.IcosahedronGeometry(1, 1); gLeaf.computeVertexNormals();         // 면마다 빛이 달라 보이는 각진 잎
+    var gCone = new THREE.ConeGeometry(1, 1, 9).toNonIndexed(); gCone.computeVertexNormals();
+    var GREENS = [0x3f803b, 0x4d9042, 0x58994a, 0x467f3c], TOPGREEN = 0x6aab52;
     W.TREES.forEach(function (p, i) {
       var tree = new THREE.Group(), crown = new THREE.Group(), s = 0.9 + (i % 4) * 0.12;
       tree.position.set(p[0], 0, p[1]); tree.rotation.y = i * 1.7;
-      var t = new THREE.Mesh(gTrunk, mat(i % 2 ? 0x7a5a3c : 0x6b4c33)); t.position.y = 1.2; tree.add(t);
+      var bark = i % 2 ? 0x7a5a3c : 0x6b4c33;
+      var t = new THREE.Mesh(gTrunk, mat(bark)); t.position.y = 1.2; tree.add(t);
+      var rt = new THREE.Mesh(gRoot, mat(bark)); rt.position.y = 0.15; tree.add(rt);
       crown.position.y = 2.0;
-      if (i % 4 === 3) {                                                 // 침엽수
-        [[1.5, 1.9, 0.9], [1.2, 1.7, 1.9], [0.85, 1.5, 2.8]].forEach(function (c, k) {
-          var m = new THREE.Mesh(gCone, mat(k % 2 ? 0x3f8a4f : 0x357a45));
-          m.scale.set(c[0] * s, c[1] * s, c[0] * s); m.position.y = c[2] * s; crown.add(m);
+      if (i % 4 === 3) {                                                 // 침엽수: 네 단
+        [[1.65, 1.6, 0.6], [1.35, 1.5, 1.5], [1.05, 1.4, 2.35], [0.7, 1.2, 3.1]].forEach(function (c, k) {
+          var m = new THREE.Mesh(gCone, mat([0x2f6b3d, 0x3a7a45, 0x33713f, 0x45874c][k]));
+          m.scale.set(c[0] * s, c[1] * s, c[0] * s); m.position.y = c[2] * s; m.rotation.y = k * 0.7; crown.add(m);
         });
       } else {
-        [[0, 1.0, 0, 1.3], [0.75, 0.55, 0.3, 0.95], [-0.65, 0.6, -0.35, 1.0], [0.1, 0.5, -0.75, 0.85], [-0.15, 1.75, 0.15, 0.8]]
+        [-1, 1].forEach(function (sd) {                                    // 굵은 가지 두 개
+          var br = new THREE.Mesh(gBranch, mat(bark)); br.position.set(sd * 0.28, 1.95, 0.05); br.rotation.z = -sd * 0.75; tree.add(br);
+        });
+        [[0, 1.05, 0, 1.25], [0.85, 0.6, 0.25, 0.95], [-0.8, 0.65, -0.3, 1.0], [0.15, 0.55, -0.85, 0.9], [-0.3, 0.5, 0.8, 0.85],
+          [0.55, 1.55, -0.35, 0.8], [-0.45, 1.65, 0.3, 0.78], [0.05, 2.05, 0.05, 0.65]]
           .forEach(function (c, k) {
-            var m = new THREE.Mesh(gLeaf, mat(GREENS[(i + k) % GREENS.length]));
-            m.scale.set(c[3] * s, c[3] * s * 0.9, c[3] * s); m.position.set(c[0] * s, c[1] * s, c[2] * s);
+            var m = new THREE.Mesh(gLeaf, mat(k >= 5 ? (k === 7 ? TOPGREEN : GREENS[(i + k) % 2 + 1]) : GREENS[(i + k) % GREENS.length]));
+            m.scale.set(c[3] * s, c[3] * s * 0.88, c[3] * s); m.position.set(c[0] * s, c[1] * s, c[2] * s);
             m.rotation.set(k, i, k * 2); crown.add(m);
           });
       }
+      crown.userData.dyn = true;
       tree.add(crown); outdoor.add(tree);
       env.trees.push({ crown: crown, ph: i * 1.37, yaw: tree.rotation.y });
     });
@@ -448,12 +551,15 @@ function bonsaBoot() {
       return new THREE.CanvasTexture(c);
     })();
     env.lampMat = new THREE.MeshBasicMaterial({ color: 0x9aa3b0 });
-    var gPole = new THREE.CylinderGeometry(0.07, 0.1, 3.8, 8), gBulb = new THREE.SphereGeometry(0.24, 12, 10);
+    var gPole = new THREE.CylinderGeometry(0.07, 0.1, 3.8, 8), gBulb = new THREE.CylinderGeometry(0.15, 0.19, 0.36, 12);
+    var gCap = new THREE.CylinderGeometry(0.05, 0.32, 0.16, 12), gBase = new THREE.CylinderGeometry(0.2, 0.26, 0.4, 10);
     W.LAMPS.forEach(function (l) {
       var dir = l[0] < 0 ? 1 : -1;
       var pole = new THREE.Mesh(gPole, mat(0x39424f)); pole.position.set(l[0], 1.9, l[1]); outdoor.add(pole);
       box(0.9, 0.08, 0.08, 0x39424f, l[0] + dir * 0.4, 3.78, l[1], outdoor);
-      var bulb = new THREE.Mesh(gBulb, env.lampMat); bulb.position.set(l[0] + dir * 0.8, 3.62, l[1]); outdoor.add(bulb);
+      var bulb = new THREE.Mesh(gBulb, env.lampMat); bulb.position.set(l[0] + dir * 0.8, 3.5, l[1]); bulb.userData.ns = true; outdoor.add(bulb);
+      var cap = new THREE.Mesh(gCap, mat(0x2b323c)); cap.position.set(l[0] + dir * 0.8, 3.74, l[1]); outdoor.add(cap);
+      var lb = new THREE.Mesh(gBase, mat(0x2b323c)); lb.position.set(l[0], 0.2, l[1]); outdoor.add(lb);
       var glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0 }));
       glow.scale.set(2.6, 2.6, 1); glow.position.copy(bulb.position); outdoor.add(glow); env.lampGlows.push(glow);
       var pool = new THREE.Mesh(new THREE.CircleGeometry(3.4, 24),
@@ -469,7 +575,7 @@ function bonsaBoot() {
     var fgeo = new THREE.BufferGeometry(), fattr = new THREE.BufferAttribute(fpos, 3);
     fgeo.setAttribute('position', fattr); fgeo.setIndex(fidx);
     env.flagMat = new THREE.MeshBasicMaterial({ color: 0x2f6fed, side: THREE.DoubleSide });
-    var flag = new THREE.Mesh(fgeo, env.flagMat); flag.frustumCulled = false; outdoor.add(flag);
+    var flag = new THREE.Mesh(fgeo, env.flagMat); flag.frustumCulled = false; flag.userData.dyn = true; outdoor.add(flag);
     env.flag = { n: FN, pos: fpos, attr: fattr };
 
     // 구름: 바람 방향으로 흘러가고, 구름양에 따라 개수가 달라진다
@@ -501,6 +607,101 @@ function bonsaBoot() {
     var sgeo = new THREE.BufferGeometry(); sgeo.setAttribute('position', new THREE.BufferAttribute(spos, 3));
     env.starMat = new THREE.PointsMaterial({ color: 0xffffff, size: 2, sizeAttenuation: false, fog: false, transparent: true, opacity: 0, depthWrite: false });
     env.stars = new THREE.Points(sgeo, env.starMat); env.stars.frustumCulled = false; outdoor.add(env.stars);
+    [env.sunOrb, env.moonOrb].forEach(function (o) { o.userData.ns = true; });
+    env.clouds.forEach(function (c) { c.g.userData.dyn = true; c.g.traverse(function (o) { o.userData.ns = true; }); });
+    env.lampPools.forEach(function (o) { o.userData.ns = true; });
+
+    // 벤치, 화분, 쓰레기통 (부딪힘 영역은 world.js 에 같이 있다)
+    W.BENCHES.forEach(function (b) {
+      var g = new THREE.Group(); g.position.set(b[0], 0, b[1]); g.rotation.y = b[2] > 0 ? 0 : Math.PI;
+      for (var k = 0; k < 3; k++) box(0.16, 0.06, 1.7, 0xb07a4a, -0.18 + k * 0.18, 0.46, 0, g);       // 앉는 판
+      box(0.06, 0.16, 1.7, 0xa06c3f, -0.3, 0.68, 0, g); box(0.06, 0.16, 1.7, 0xa06c3f, -0.3, 0.88, 0, g);  // 등받이
+      [-0.7, 0.7].forEach(function (zz) { box(0.5, 0.42, 0.08, 0x3a424d, -0.05, 0.22, zz, g); box(0.06, 0.6, 0.08, 0x3a424d, -0.3, 0.72, zz, g); });
+      outdoor.add(g);
+    });
+    W.PLANTERS.forEach(function (p) {
+      var pot = new THREE.Mesh(new THREE.CylinderGeometry(0.78, 0.66, 0.6, 18), mat(0xb9b2a5)); pot.position.set(p[0], 0.3, p[1]); outdoor.add(pot);
+      var soil = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 0.7, 0.04, 18), mat(0x5b4636)); soil.position.set(p[0], 0.6, p[1]); outdoor.add(soil);
+      var bush = new THREE.Mesh(gLeaf, mat(0x4d9042)); bush.scale.set(0.6, 0.5, 0.6); bush.position.set(p[0], 0.95, p[1]); outdoor.add(bush);
+    });
+    W.BINS.forEach(function (p) {
+      var bin = new THREE.Mesh(new THREE.CylinderGeometry(0.23, 0.2, 0.78, 12), mat(0x3d5a47)); bin.position.set(p[0], 0.39, p[1]); outdoor.add(bin);
+      var lid = new THREE.Mesh(new THREE.CylinderGeometry(0.26, 0.26, 0.06, 12), mat(0x2b3d31)); lid.position.set(p[0], 0.81, p[1]); outdoor.add(lid);
+    });
+
+    // 잔디밭 빈 곳 고르기: 길, 광장, 건물, 가게, 나무, 소품을 피한다
+    function lawn(x, z) {
+      if (Math.abs(x) < 3.1 && z > 5.5 && z < 40.6) return false;
+      if (Math.abs(x) < 11.5 && z > 5.5 && z < 11.6) return false;
+      return !W.blocked('out', x, z);
+    }
+    var m4 = new THREE.Matrix4(), q4 = new THREE.Quaternion(), e4 = new THREE.Euler(), v4 = new THREE.Vector3(), s4 = new THREE.Vector3(), c4 = new THREE.Color();
+    function put(im, k, x, y, z, ry, sx, sy, sz, color) {
+      q4.setFromEuler(e4.set(0, ry, 0)); m4.compose(v4.set(x, y, z), q4, s4.set(sx, sy, sz)); im.setMatrixAt(k, m4);
+      if (color !== undefined) im.setColorAt(k, c4.set(color).convertSRGBToLinear());
+    }
+    // 풀 포기: 가는 잎 다섯 장. 법선을 위로 두어 땅과 같은 밝기로 보이게 한다
+    var tp = [], tn = [], tcl = [];
+    for (var bl = 0; bl < 5; bl++) {
+      var ba = bl * 1.26 + 0.3, ox = Math.cos(ba) * 0.05, oz = Math.sin(ba) * 0.05, hh = 0.24 + (bl % 3) * 0.07, px = -Math.sin(ba) * 0.035, pz = Math.cos(ba) * 0.035;
+      tp.push(ox - px, 0, oz - pz, ox + px, 0, oz + pz, ox + Math.cos(ba) * 0.1, hh, oz + Math.sin(ba) * 0.1);
+      tn.push(0, 1, 0, 0, 1, 0, 0, 1, 0); tcl.push(0.72, 0.82, 0.68, 0.72, 0.82, 0.68, 1.05, 1.08, 1);
+    }
+    var gTuft = new THREE.BufferGeometry();
+    gTuft.setAttribute('position', new THREE.Float32BufferAttribute(tp, 3));
+    gTuft.setAttribute('normal', new THREE.Float32BufferAttribute(tn, 3));
+    gTuft.setAttribute('color', new THREE.Float32BufferAttribute(tcl, 3));
+    var TUFTS = 2400, tufts = new THREE.InstancedMesh(gTuft, new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide }), TUFTS), tn2 = 0, tx, tz, tr, ta;
+    for (var tt = 0; tt < TUFTS * 6 && tn2 < TUFTS; tt++) {
+      ta = rnd() * Math.PI * 2; tr = 2 + Math.sqrt(rnd()) * 46; tx = Math.cos(ta) * tr; tz = 14 + Math.sin(ta) * tr;
+      if (!lawn(tx, tz)) continue;
+      var ts = 0.45 + rnd() * 0.45;
+      put(tufts, tn2++, tx, 0, tz, rnd() * 6.28, ts, ts * (0.7 + rnd() * 0.5), ts, ['#64a54c', '#5a9944', '#70b157', '#7cbc5e'][tn2 % 4]);
+    }
+    tufts.count = tn2; tufts.userData.rcv = true; outdoor.add(tufts);
+    // 들꽃: 무더기로 핀다
+    var FLOWERS = 420, flowers = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(0.075, 0), new THREE.MeshLambertMaterial(), FLOWERS), fn = 0;
+    var FCOL = ['#ffffff', '#ffe066', '#ff9fb8', '#c9a7ff', '#ffb36b'];
+    for (var fc = 0; fc < 120 && fn < FLOWERS; fc++) {
+      ta = rnd() * Math.PI * 2; tr = 3 + Math.sqrt(rnd()) * 36;
+      var cx0 = Math.cos(ta) * tr, cz0 = 14 + Math.sin(ta) * tr, col0 = FCOL[fc % FCOL.length];
+      for (var fk = 0; fk < 7 && fn < FLOWERS; fk++) {
+        tx = cx0 + (rnd() - 0.5) * 1.4; tz = cz0 + (rnd() - 0.5) * 1.4;
+        if (lawn(tx, tz)) put(flowers, fn++, tx, 0.2 + rnd() * 0.08, tz, rnd() * 6, 1, 0.7, 1, col0);
+      }
+    }
+    // 광장 화분의 꽃
+    W.PLANTERS.forEach(function (p, pi) {
+      for (var k = 0; k < 14 && fn < FLOWERS; k++) {
+        var a = k / 14 * Math.PI * 2;
+        put(flowers, fn++, p[0] + Math.cos(a) * 0.5, 0.72, p[1] + Math.sin(a) * 0.5, a, 1.1, 0.8, 1.1, FCOL[(k + pi) % FCOL.length]);
+      }
+    });
+    flowers.count = fn; flowers.userData.rcv = true; outdoor.add(flowers);
+    env.lowHide = [tufts, flowers];
+
+    // 먼 숲: 나무 백여 그루를 한꺼번에 그린다 (그림자 없음)
+    var RING = 110, gFar = new THREE.ConeGeometry(1, 1, 7).toNonIndexed(); gFar.computeVertexNormals();
+    var farCone = new THREE.InstancedMesh(gFar, new THREE.MeshLambertMaterial(), RING), farBall = new THREE.InstancedMesh(gLeaf, new THREE.MeshLambertMaterial(), RING);
+    var farTrunk = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.25, 0.35, 1, 6), mat(0x6b4c33), RING * 2), nC = 0, nB = 0, nT = 0;
+    for (var ri = 0; ri < RING * 2; ri++) {
+      ta = rnd() * Math.PI * 2; tr = 46 + rnd() * 26; tx = Math.cos(ta) * tr; tz = Math.sin(ta) * tr + 6;
+      var fsz = 0.8 + rnd() * 0.7;
+      put(farTrunk, nT++, tx, 0.8 * fsz, tz, 0, fsz, 1.6 * fsz, fsz);
+      if (ri % 2) put(farCone, nC++, tx, 4 * fsz, tz, rnd() * 6, 2.2 * fsz, 5.5 * fsz, 2.2 * fsz, ['#2f6b3d', '#3a7a45', '#2c6338'][ri % 3]);
+      else put(farBall, nB++, tx, 3.2 * fsz, tz, rnd() * 6, 2.4 * fsz, 2.2 * fsz, 2.4 * fsz, ['#3f803b', '#4d9042', '#467f3c'][ri % 3]);
+    }
+    farCone.count = nC; farBall.count = nB; farTrunk.count = nT;
+    [farCone, farBall, farTrunk].forEach(function (o) { o.userData.ns = true; outdoor.add(o); });
+
+    // 그림자 설정: 표시한 것 말고는 모두 그림자를 드리우고 받는다
+    outdoor.traverse(function (o) {
+      if (!o.isMesh || o.userData.ns) return;
+      o.receiveShadow = true;
+      o.castShadow = !o.userData.rcv;
+    });
+    env.trees.forEach(function (t) { mergeStatic(t.crown, false); });
+    mergeStatic(outdoor, true);
   })();
 
   /* ---------- 비, 눈, 날리는 잎 (내 주변에만 그려서 가볍다) ---------- */
@@ -522,6 +723,7 @@ function bonsaBoot() {
   var npcs = [];
   (function buildLobby() {
     var floor = new THREE.Mesh(new THREE.PlaneGeometry(LW, LD), texMat(tileTex('#e6dccb', '#cfc4b0', LW / 2, LD / 2)));
+    floor.receiveShadow = true;
     floor.rotation.x = -Math.PI / 2; lobby.add(floor);
     var ceil = new THREE.Mesh(new THREE.PlaneGeometry(LW, LD), mat(0xf7f7f4));
     ceil.rotation.x = Math.PI / 2; ceil.position.y = LH; lobby.add(ceil);
@@ -618,6 +820,7 @@ function bonsaBoot() {
   var roomTops = [];                                   // 꾸미기 모드에서 위에서 내려다볼 때 숨길 것들 (천장, 조명)
   function roomShell(g, floorMat, wall, wall2) {
     var fl = new THREE.Mesh(new THREE.PlaneGeometry(LW, LD), floorMat);
+    fl.receiveShadow = true;
     fl.rotation.x = -Math.PI / 2; g.add(fl);
     var ce = new THREE.Mesh(new THREE.PlaneGeometry(LW, LD), mat(0xf7f7f4));
     ce.rotation.x = Math.PI / 2; ce.position.y = LH; g.add(ce); roomTops.push(ce);
@@ -726,6 +929,7 @@ function bonsaBoot() {
     } else {                                                             // 러그
       box(2.9, 0.03, 1.9, 0xb5524a, 0, 0.02, 0, g); box(2.5, 0.035, 1.5, 0xd98a6e, 0, 0.022, 0, g);
     }
+    g.traverse(function (o) { if (o.isMesh) { o.castShadow = type !== 'rug'; o.receiveShadow = true; } });
     return g;
   }
   function dropFurn(it) {
@@ -977,7 +1181,17 @@ function bonsaBoot() {
   /* ---------- 메뉴: 프로필, 명부, 게시판, 꾸미기, 설정, 로그아웃을 한곳에 ---------- */
   var quality = 'high', qualityChosen = false;
   try { var savedQ = localStorage.getItem('bonsa_quality'); if (savedQ) { qualityChosen = true; if (savedQ === 'low') quality = 'low'; } } catch (e) {}
-  function applyQuality() { renderer.setPixelRatio(quality === 'low' ? 1 : Math.min(window.devicePixelRatio || 1, 2)); resize(); }
+  function applyQuality() {
+    renderer.setPixelRatio(quality === 'low' ? 1 : Math.min(window.devicePixelRatio || 1, 2));
+    var on = quality !== 'low';
+    if (renderer.shadowMap.enabled !== on) {                 // 그림자를 켜고 끄면 재질을 다시 만들어야 한다
+      renderer.shadowMap.enabled = on;
+      scene.traverse(function (o) { if (o.material) (Array.isArray(o.material) ? o.material : [o.material]).forEach(function (m) { m.needsUpdate = true; }); });
+    }
+    shadowsOn = on;
+    if (env.lowHide) env.lowHide.forEach(function (o) { o.visible = on; });
+    resize();
+  }
   function renderMenu() {
     $('mnWho').textContent = tagOf(me.r, me.n || '') + (me.floor ? ' · ' + floorLabel(me.floor) + ' 등록' : ' · 등록한 층 없음') + ' · ' + moneyText();
     $('mnBoardF').style.display = me.floor ? '' : 'none';
@@ -1762,8 +1976,9 @@ function bonsaBoot() {
     if (!outside) {                                      // 실내는 늘 같은 조명
       scene.background.setRGB(C_IN[0], C_IN[1], C_IN[2]);
       scene.fog.near = 200; scene.fog.far = 400;
-      hemi.intensity = 0.85; hemi.color.setRGB(1, 1, 1);
-      sun.intensity = 0.6; sun.color.setRGB(1, 1, 1); sun.position.set(18, 40, 26);
+      hemi.intensity = 0.8; hemi.color.setRGB(1, 1, 1);
+      sun.intensity = 0.5; sun.color.setRGB(1, 1, 1);
+      sun.target.position.set(P.x, 0, P.z); sun.position.set(P.x + 9, 40, P.z + 12);     // 실내: 천장 조명처럼 거의 위에서
       return;
     }
 
@@ -1785,13 +2000,26 @@ function bonsaBoot() {
 
     var sunDir = arcDir((h - sr) / (ss - sr)), nh = h < sr ? h + 24 : h, moonDir = arcDir((nh - ss) / (sr + 24 - ss));
     var ld = dayF > 0.3 ? sunDir : moonDir;
-    sun.position.set(ld[0] * 60, ld[1] * 60, ld[2] * 60);
-    var sc = mix3([0.6, 0.68, 1], mix3([1, 1, 1], [1, 0.78, 0.55], tw * 0.8), dayF);
+    // 그림자 범위가 내 캐릭터를 따라다니도록 빛의 과녁을 캐릭터에 둔다
+    sun.target.position.set(P.x, 0, P.z);
+    sun.position.set(P.x + ld[0] * 60, Math.max(ld[1], 0.25) * 60, P.z + ld[2] * 60);
+    var sc = mix3([0.6, 0.68, 1], mix3([1, 0.97, 0.9], [1, 0.74, 0.5], tw * 0.8), dayF);
     sun.color.setRGB(sc[0], sc[1], sc[2]);
-    sun.intensity = 0.12 + 0.68 * dayF * (1 - E.cover * 0.65);
-    var hc = mix3([0.55, 0.62, 0.95], [1, 1, 1], dayF);
+    // 햇빛은 세게, 하늘빛은 약하게 해서 그늘이 생기게 한다. 흐리면 햇빛이 줄고 하늘빛이 조금 는다.
+    sun.intensity = 0.1 + 0.8 * dayF * (1 - E.cover * 0.92);
+    var hc = mix3([0.55, 0.62, 0.95], [0.92, 0.96, 1], dayF);
     hemi.color.setRGB(hc[0], hc[1], hc[2]);
-    hemi.intensity = 0.32 + 0.53 * dayF * (1 - E.cover * 0.25) + E.flash * 0.8;
+    hemi.groundColor.setRGB(0.42, 0.45, 0.36);
+    hemi.intensity = 0.32 + 0.4 * dayF + 0.3 * dayF * E.cover + E.flash * 0.8;
+    // 하늘: 지평선은 안개와 같은 색, 위쪽은 더 짙게
+    var topC = mix3([sky[0] * 0.5, sky[1] * 0.55, sky[2] * 0.8], [sky[0] * 0.55, sky[1] * 0.72, Math.min(1, sky[2] * 1.02)], dayF);
+    topC = mix3(topC, sky, E.cover * 0.7 + E.fog * 0.3);
+    env.skyMat.uniforms.bottom.value.setRGB(sky[0], sky[1], sky[2]);
+    env.skyMat.uniforms.top.value.setRGB(topC[0], topC[1], topC[2]);
+    env.skyMat.uniforms.sunDir.value.set(sunDir[0], sunDir[1], sunDir[2]);
+    env.skyMat.uniforms.sunCol.value.setRGB(sc[0], sc[1] * 0.95, sc[2] * 0.85);
+    env.skyMat.uniforms.sunAmt.value = clamp01(dayF * 1.2) * (1 - E.cover) * (1 - E.fog);
+    env.sky.position.set(cx, cy, cz);
 
     env.sunOrb.position.set(cx + sunDir[0] * 175, cy + sunDir[1] * 175, cz + sunDir[2] * 175); env.sunOrb.lookAt(cx, cy, cz);
     env.sunOrb.material.opacity = clamp01(dayF * 1.4) * (1 - E.cover) * (1 - E.fog);
@@ -1942,7 +2170,7 @@ function bonsaBoot() {
   var last = performance.now(), lastSend = 0, sent = { x: 0, z: 0, f: 0 };
   function frame(now) {
     requestAnimationFrame(frame);
-    var dt = Math.min(0.05, (now - last) / 1000); last = now;
+    var rawDt = (now - last) / 1000, dt = Math.min(0.05, rawDt); last = now;
 
     // 입력 → 이동 방향 (카메라 기준). 내 캐릭터는 먼저 움직이고 서버가 검사해 틀리면 되돌린다.
     var ix = joy.x, iy = -joy.y;
@@ -1954,8 +2182,8 @@ function bonsaBoot() {
     if (mag > 1) { ix /= mag; iy /= mag; mag = 1; }
     // 느린 기기 자동 감지: 게임 시작 5초 뒤부터 4초 동안 평균 24프레임이 안 나오면 화질을 한 번 낮춘다 (직접 고른 설정은 건드리지 않는다)
     if (playing && !qualityChosen && quality === 'high') {
-      fpsT += dt; fpsN++;
-      if (fpsWarm < 5) { fpsWarm += dt; fpsT = 0; fpsN = 0; }
+      fpsT += Math.min(rawDt, 1); fpsN++;                 // 실제 걸린 시간으로 잰다 (dt 는 0.05초로 잘려 있어 느린 기기를 못 알아본다)
+      if (fpsWarm < 5) { fpsWarm += Math.min(rawDt, 1); fpsT = 0; fpsN = 0; }
       else if (fpsT >= 4) {
         if (fpsN / fpsT < 24) { quality = 'low'; applyQuality(); toast('기기가 느려 화질을 낮췄습니다. 메뉴의 설정에서 바꿀 수 있어요.'); }
         fpsT = 0; fpsN = 0;
