@@ -747,9 +747,18 @@ class Game {
       for (const p of this.rooms[area]) {
         if (!p.dirty) continue;
         p.dirty = false;
-        ps.push([p.id, Math.round(p.x * 100) / 100, Math.round(p.z * 100) / 100, Math.round(p.f * 100) / 100]);
+        // 전송량을 줄이려고 정수로 보낸다: 위치는 cm, 방향은 0.1라디안 단위
+        ps.push([p.id, Math.round(p.x * 100), Math.round(p.z * 100), Math.round(p.f * 10)]);
       }
-      if (ps.length) this.broadcast(area, { t: 'state', ps });
+      if (!ps.length) continue;
+      // 위치 방송은 받는 쪽이 밀려 있으면 건너뛴다(다음 것이 곧 또 가므로). 너무 많이 밀린 연결은 끊어서 서버 메모리를 지킨다.
+      const msg = JSON.stringify({ t: 'state', ps });
+      for (const p of this.rooms[area]) {
+        if (p.ws.readyState !== 1) continue;
+        const backlog = p.ws.bufferedAmount;
+        if (backlog > 4 * 1024 * 1024) p.ws.terminate();
+        else if (backlog < 256 * 1024) p.ws.send(msg);
+      }
     }
   }
 }

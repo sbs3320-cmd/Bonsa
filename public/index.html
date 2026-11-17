@@ -265,7 +265,7 @@
         <button type="button" id="mnQuality">화질<span></span></button>
       </div>
     </div>
-    <div class="sec"><div class="list"><button type="button" id="mnLogout">로그아웃</button></div></div>
+    <div class="sec"><div class="list"><button type="button" id="mnPass">비밀번호 변경</button><button type="button" id="mnLogout">로그아웃</button></div></div>
     <div style="text-align:right;margin-top:12px"><button class="btn ghost" id="mnClose" type="button">닫기</button></div>
   </div>
 </div>
@@ -330,6 +330,24 @@
     <div class="note" id="rsNote">불러오는 중…</div>
     <div id="rsList" class="list"></div>
     <div style="text-align:right;margin-top:12px"><button class="btn ghost" id="rsClose" type="button">닫기</button></div>
+  </div>
+</div>
+
+<div id="pass" class="modal">
+  <div class="card">
+    <h2>비밀번호 변경</h2>
+    <div class="note">지금 비밀번호를 확인한 뒤 새 비밀번호(8자 이상)로 바꿉니다.</div>
+    <form id="pwForm" autocomplete="off">
+      <input id="pwOld" type="password" maxlength="72" placeholder="지금 비밀번호" autocomplete="current-password">
+      <div style="height:8px"></div>
+      <input id="pwNew" type="password" maxlength="72" placeholder="새 비밀번호 (8자 이상)" autocomplete="new-password">
+      <div style="height:8px"></div>
+      <input id="pwNew2" type="password" maxlength="72" placeholder="새 비밀번호 한 번 더" autocomplete="new-password">
+      <div class="row" style="justify-content:flex-end">
+        <button class="btn ghost" id="pwClose" type="button">닫기</button>
+        <button class="btn" type="submit">바꾸기</button>
+      </div>
+    </form>
   </div>
 </div>
 

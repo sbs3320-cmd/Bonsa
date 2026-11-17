@@ -159,6 +159,7 @@ function pgStore() {
     async moveFurniture(id, x, z, rot) { await pool.query('UPDATE furniture SET x = $2, z = $3, rot = $4 WHERE id = $1', [id, x, z, rot]); },
     // 치우기: 지워진 줄이 있을 때만 true (두 사람이 동시에 치워도 환불은 한 번만 나가게)
     async deleteFurniture(id) { return (await pool.query('DELETE FROM furniture WHERE id = $1', [id])).rowCount === 1; },
+    async setPassword(uid, hash) { await pool.query('UPDATE users SET pass_hash = $2 WHERE id = $1', [uid, hash]); },
     // ---- 총관리자 화면용 ----
     async getSetting(key) { const r = await pool.query('SELECT value FROM settings WHERE key = $1', [key]); return r.rows.length ? r.rows[0].value : null; },
     async setSetting(key, value) { await pool.query('INSERT INTO settings (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = $2', [key, value]); },
@@ -173,6 +174,18 @@ function pgStore() {
       return r.rows.length ? r.rows[0].money : null;
     },
     async setBanned(uid, on) { return (await pool.query('UPDATE users SET banned = $2 WHERE id = $1', [uid, on])).rowCount === 1; },
+    // 백업: 복구에 필요한 것을 모두 담는다 (비밀번호 해시 포함. 관리자 2단계 인증 비밀값은 뺀다)
+    async exportAll() {
+      const q = async sql => (await pool.query(sql)).rows;
+      return {
+        users: await q('SELECT * FROM users ORDER BY id'), floors: await q('SELECT * FROM floors ORDER BY floor'),
+        posts: await q('SELECT * FROM posts ORDER BY id'), furniture: await q('SELECT * FROM furniture ORDER BY id'),
+        events: await q('SELECT * FROM events ORDER BY id'), event_entries: await q('SELECT * FROM event_entries ORDER BY event_id, user_id'),
+        user_items: await q('SELECT * FROM user_items ORDER BY user_id, item'),
+        settings: await q("SELECT * FROM settings WHERE key <> 'admin_totp' ORDER BY key"),
+        audit_log: await q('SELECT * FROM (SELECT * FROM audit_log ORDER BY id DESC LIMIT 5000) t ORDER BY id')
+      };
+    },
     async adminPosts() {
       const r = await pool.query(
         `SELECT p.id, p.board, p.title, p.body, p.pinned, p.created_at, u.nickname FROM posts p JOIN users u ON u.id = p.author
@@ -313,6 +326,7 @@ function memoryStore() {
     async addFurniture(floor, type, x, z, rot, owner, paid) { furn.push({ id: ++furnSeq, floor, type, x, z, rot, owner, paid }); return furnSeq; },
     async moveFurniture(id, x, z, rot) { const f = furn.find(y => y.id === id); if (f) { f.x = x; f.z = z; f.rot = rot; } },
     async deleteFurniture(id) { const i = furn.findIndex(y => y.id === id); if (i < 0) return false; furn.splice(i, 1); return true; },
+    async setPassword(uid, hash) { const u = users.find(x => x.id === uid); if (u) u.pass_hash = hash; },
     async getSetting(key) { return Object.prototype.hasOwnProperty.call(settings, key) ? settings[key] : null; },
     async setSetting(key, value) { settings[key] = value; },
     async delSetting(key) { delete settings[key]; },
@@ -320,6 +334,10 @@ function memoryStore() {
     async setRankForce(uid, rank) { const u = users.find(x => x.id === uid); if (!u) return false; u.rank = rank; return true; },
     async adjustMoney(uid, delta) { const u = users.find(x => x.id === uid); if (!u) return null; u.money = Math.max(0, u.money + delta); return u.money; },
     async setBanned(uid, on) { const u = users.find(x => x.id === uid); if (!u) return false; u.banned = on; return true; },
+    async exportAll() {
+      const s = {}; Object.keys(settings).forEach(k => { if (k !== 'admin_totp') s[k] = settings[k]; });
+      return { users, floors, posts, furniture: furn, events, event_entries: entries, user_items: users.map(u => ({ user_id: u.id, items: u.items })), settings: s, audit_log: log.slice(-5000) };
+    },
     async adminPosts() {
       return posts.filter(x => !x.deleted).slice(-150).reverse().map(x => ({ id: x.id, board: x.board, title: x.title, body: x.body, pinned: x.pinned, at: x.at, nickname: users.find(v => v.id === x.author).nickname }));
     },

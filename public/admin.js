@@ -61,7 +61,18 @@
         show([card('개요', '저장소: ' + (r.storage === 'pg' ? 'PostgreSQL' : r.storage), [el('div', { cls: 'grid' }, [
           stat(r.users + ' / ' + r.maxUsers, '가입자'), stat(r.online + ' / ' + r.maxOnline, '지금 접속'), stat(r.banned, '정지된 계정'),
           stat(r.openEvents, '진행 중 이벤트'), stat(r.signupOpen ? '받는 중' : '닫힘', '새 가입')])]),
-          card('공지', '', [el('div', { text: r.notice || '등록된 공지가 없습니다.' })])]);
+          card('공지', '', [el('div', { text: r.notice || '등록된 공지가 없습니다.' })]),
+          card('백업', '모든 데이터를 파일 하나로 내려받습니다. 일주일에 한 번쯤 받아 두기를 권합니다. 파일에는 암호화된 비밀번호가 들어 있으니 남에게 주지 말고 안전한 곳에 보관하세요.',
+            [el('button', { text: '백업 파일 내려받기', on: function () {
+              act('backup').then(function (x) {
+                var a = document.createElement('a'), d = new Date(Date.now() + 9 * 3600000).toISOString().slice(0, 10);
+                a.href = URL.createObjectURL(new Blob([JSON.stringify(x.backup)], { type: 'application/json' }));
+                a.download = 'bonsa-backup-' + d + '.json';
+                document.body.appendChild(a); a.click(); a.remove();
+                setTimeout(function () { URL.revokeObjectURL(a.href); }, 5000);
+                say('백업 파일을 내려받았습니다.');
+              });
+            } })])]);
       });
     },
     users: function () {
@@ -152,7 +163,7 @@
       return act('logs', { action: filter || '' }).then(function (r) {
         var sel = el('select');
         [['', '전체'], ['rank', '직급 변경'], ['money', '코인 이동'], ['admin_login', '관리자 로그인'], ['admin_rank', '관리자: 직급'], ['admin_money', '관리자: 코인'],
-          ['admin_ban', '관리자: 정지'], ['admin_post', '관리자: 게시판'], ['admin_shop', '관리자: 값'], ['admin_config', '관리자: 설정'], ['floor_name', '층 이름'],
+          ['admin_ban', '관리자: 정지'], ['admin_backup', '관리자: 백업'], ['admin_post', '관리자: 게시판'], ['admin_shop', '관리자: 값'], ['admin_config', '관리자: 설정'], ['floor_name', '층 이름'],
           ['floor12_pass', '12층 비밀번호'], ['event_new', '이벤트 생성'], ['event_close', '이벤트 종료']].forEach(function (o) {
           var x = el('option', { value: o[0], text: o[1] }); if (o[0] === (filter || '')) x.selected = true; sel.appendChild(x);
         });

@@ -20,6 +20,11 @@ module.exports = {
   sessionTtlMs: 24 * 60 * 60 * 1000,
   maxUsers: Number(process.env.MAX_USERS) || 200,
   maxOnline: Number(process.env.MAX_ONLINE) || 100,
+  // 횟수 제한. 같은 사무실·학교처럼 여러 사람이 한 IP를 같이 쓰는 경우를 생각해 넉넉히 잡고, 전체 합계 제한을 따로 둔다.
+  apiPerMin: Number(process.env.API_PER_MIN) || 40,
+  signupPerHour: Number(process.env.SIGNUP_PER_HOUR) || 30,
+  signupPerHourAll: Number(process.env.SIGNUP_PER_HOUR_ALL) || 80,
+  wsPerMin: Number(process.env.WS_PER_MIN) || 120,
   // 총관리자 계정의 로그인 아이디. 비밀번호는 여기에 두지 않는다 (가입할 때 정한 것이 해시로 DB에만 있다).
   superAdmin: (process.env.SUPERADMIN_USERNAME || '').trim().toLowerCase()
 };

@@ -176,9 +176,10 @@ function bonsaBoot() {
     body.scale.set(1, 1.1, 0.92); body.position.y = 0.68; g.add(body);
     var head = new THREE.Mesh(gHead, mat(color));
     head.position.y = 1.42; g.add(head);
+    var detail = [];                                     // 멀리서는 안 보이는 작은 부품들 (멀면 숨겨서 가볍게)
     [-0.14, 0.14].forEach(function (x) {
       var e = new THREE.Mesh(gEye, mat(0x1c2430));
-      e.position.set(x, 1.47, 0.36); g.add(e);
+      e.position.set(x, 1.47, 0.36); g.add(e); detail.push(e);
     });
     var feet = [];
     [-0.2, 0.2].forEach(function (x) {
@@ -187,7 +188,7 @@ function bonsaBoot() {
     });
     // 얼굴: 볼과 입
     [-0.25, 0.25].forEach(function (x) {
-      var ck = part(gCheek, 0xf59aa0, x, 1.36, 0.29, g); ck.scale.set(1, 0.7, 0.5);
+      var ck = part(gCheek, 0xf59aa0, x, 1.36, 0.29, g); ck.scale.set(1, 0.7, 0.5); detail.push(ck);
     });
     var mouth = part(gMouth, 0x1c2430, 0, 1.36, 0.385, g); mouth.rotation.z = Math.PI;
     // 사원증: 목에 두른 줄이 앞으로 모여 내려오고, 그 끝에 큼직한 카드가 달린다
@@ -195,14 +196,14 @@ function bonsaBoot() {
     strap.rotation.x = Math.PI / 2 - 0.22;
     var l1 = part(gLan, LANYARD, -0.1, 1.02, 0.4, g); l1.rotation.set(0.5, 0, -0.72);
     var l2 = part(gLan, LANYARD, 0.1, 1.02, 0.4, g); l2.rotation.set(0.5, 0, 0.72);
-    part(gClip, 0xc9d0da, 0, 0.94, 0.47, g);
+    detail.push(mouth, strap, l1, l2, part(gClip, 0xc9d0da, 0, 0.94, 0.47, g));
     var badge = new THREE.Group();
     part(gCard, 0xffffff, 0, 0, 0, badge);
     part(gCardTop, LANYARD, 0, 0.155, 0, badge);
     part(gPhoto, 0xffd9a8, -0.08, -0.03, 0, badge);
     part(gLine, 0x8a94a3, 0.08, 0.0, 0, badge); part(gLine, 0xb7bfca, 0.08, -0.06, 0, badge);
     part(gLine, 0xb7bfca, 0, -0.16, 0, badge).scale.x = 2.4;
-    badge.position.set(0, 0.71, 0.5); badge.rotation.x = -0.08; g.add(badge);
+    badge.position.set(0, 0.71, 0.5); badge.rotation.x = -0.08; g.add(badge); detail.push(badge);
     // 팔, 발밑 그림자, 우산(평소에는 숨김)
     var arms = [];
     [-0.52, 0.52].forEach(function (x) {
@@ -219,6 +220,7 @@ function bonsaBoot() {
     umb.visible = false; g.add(umb);
     g.userData.feet = feet; g.userData.arms = arms; g.userData.shadow = sh; g.userData.umb = umb;
     g.userData.skin = [body, head, arms[0], arms[1]]; g.userData.hat = null;
+    g.userData.detail = detail; g.userData.far = false;
     setTag(g, tagText);
     return g;
   }
@@ -256,6 +258,13 @@ function bonsaBoot() {
     if (u.hat) { g.remove(u.hat); for (i = 0; i < u.hat.children.length; i++) u.hat.children[i].geometry.dispose(); }
     u.hat = Object.prototype.hasOwnProperty.call(W.COSM, h) ? buildHat(h) : null; u.hatKey = h;
     if (u.hat) g.add(u.hat);
+  }
+  // 거리별 표현(LOD): 멀리 있는 캐릭터는 눈, 입, 사원증 같은 작은 부품을 숨긴다. 한 명당 그리는 조각이 3분의 1로 준다.
+  function setFar(g, far) {
+    var u = g.userData;
+    if (u.far === far) return;
+    u.far = far;
+    for (var i = 0; i < u.detail.length; i++) u.detail[i].visible = !far;
   }
   // 걷는 동작과 우산 든 자세
   function pose(g, moving, walk, umbOn, sitting) {
@@ -944,8 +953,8 @@ function bonsaBoot() {
   }
 
   /* ---------- 메뉴: 프로필, 명부, 게시판, 꾸미기, 설정, 로그아웃을 한곳에 ---------- */
-  var quality = 'high';
-  try { if (localStorage.getItem('bonsa_quality') === 'low') quality = 'low'; } catch (e) {}
+  var quality = 'high', qualityChosen = false;
+  try { var savedQ = localStorage.getItem('bonsa_quality'); if (savedQ) { qualityChosen = true; if (savedQ === 'low') quality = 'low'; } } catch (e) {}
   function applyQuality() { renderer.setPixelRatio(quality === 'low' ? 1 : Math.min(window.devicePixelRatio || 1, 2)); resize(); }
   function renderMenu() {
     $('mnWho').textContent = tagOf(me.r, me.n || '') + (me.floor ? ' · ' + floorLabel(me.floor) + ' 등록' : ' · 등록한 층 없음') + ' · ' + moneyText();
@@ -975,9 +984,22 @@ function bonsaBoot() {
     renderMenu();
   });
   $('mnQuality').addEventListener('click', function () {
-    quality = quality === 'low' ? 'high' : 'low';
+    quality = quality === 'low' ? 'high' : 'low'; qualityChosen = true;
     try { localStorage.setItem('bonsa_quality', quality); } catch (e) {}
     applyQuality(); renderMenu();
+  });
+  function closePass() { if ($('pass').style.display !== 'flex') return; $('pass').style.display = 'none'; $('pwOld').value = $('pwNew').value = $('pwNew2').value = ''; uiOpen = false; }
+  $('mnPass').addEventListener('click', function () { closeMenu(); uiOpen = true; $('pass').style.display = 'flex'; });
+  $('pwClose').addEventListener('click', closePass);
+  $('pwForm').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var o = $('pwOld').value, n = $('pwNew').value;
+    if (n.length < 8) { toast('새 비밀번호는 8자 이상이어야 합니다.'); return; }
+    if (n !== $('pwNew2').value) { toast('새 비밀번호 두 칸이 서로 다릅니다.'); return; }
+    fetch('/api/password', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: token, old: o, next: n }) })
+      .then(function (r) { return r.json(); })
+      .then(function (r) { if (r.ok) { closePass(); toast('비밀번호를 바꿨습니다.'); } else toast(r.error || '바꾸지 못했습니다.'); })
+      .catch(function () { toast('서버에 연결하지 못했습니다.'); });
   });
   $('mnLogout').addEventListener('click', function () {
     closeMenu(); stopped = true; forget();
@@ -1584,7 +1606,7 @@ function bonsaBoot() {
       case 'state':
         m.ps.forEach(function (s) {
           o = others[s[0]];
-          if (o) { o.x = s[1]; o.z = s[2]; o.f = s[3]; }
+          if (o) { o.x = s[1] / 100; o.z = s[2] / 100; o.f = s[3] / 10; }
         });
         break;
       case 'chat':
@@ -1894,6 +1916,7 @@ function bonsaBoot() {
   function expireBubble(g, now) {
     if (g.userData.bubble && now > g.userData.bubbleUntil) { dropSprite(g.userData.bubble); g.userData.bubble = null; }
   }
+  var fpsT = 0, fpsN = 0, fpsWarm = 0;
   var last = performance.now(), lastSend = 0, sent = { x: 0, z: 0, f: 0 };
   function frame(now) {
     requestAnimationFrame(frame);
@@ -1907,6 +1930,15 @@ function bonsaBoot() {
     if (keys.KeyA || keys.ArrowLeft) ix -= 1;
     var mag = Math.sqrt(ix * ix + iy * iy);
     if (mag > 1) { ix /= mag; iy /= mag; mag = 1; }
+    // 느린 기기 자동 감지: 게임 시작 5초 뒤부터 4초 동안 평균 24프레임이 안 나오면 화질을 한 번 낮춘다 (직접 고른 설정은 건드리지 않는다)
+    if (playing && !qualityChosen && quality === 'high') {
+      fpsT += dt; fpsN++;
+      if (fpsWarm < 5) { fpsWarm += dt; fpsT = 0; fpsN = 0; }
+      else if (fpsT >= 4) {
+        if (fpsN / fpsT < 24) { quality = 'low'; applyQuality(); toast('기기가 느려 화질을 낮췄습니다. 메뉴의 설정에서 바꿀 수 있어요.'); }
+        fpsT = 0; fpsN = 0;
+      }
+    }
     var moving = playing && mag > 0.12 && !uiOpen && !chatOpen && now > lockUntil;
     if (moving && mySit) {                               // 앉아 있을 때 움직이려 하면 먼저 일어선다
       moving = false;
@@ -1958,6 +1990,7 @@ function bonsaBoot() {
       }
       o.g.position.y = o.sit ? 0.3 : (dd > 0.05 ? Math.abs(Math.sin(o.walk)) * 0.09 : 0);
       pose(o.g, dd > 0.05 && !o.sit, o.walk, o.umb && umbShow, o.sit);
+      setFar(o.g, (o.g.position.x - P.x) * (o.g.position.x - P.x) + (o.g.position.z - P.z) * (o.g.position.z - P.z) > (quality === 'low' ? 100 : 256));
       o.g.rotation.y = turn(o.g.rotation.y, o.f, Math.min(1, dt * 12));
       // 멀리 있는 사람의 이름표는 숨겨 그리는 양을 줄인다
       far = (o.g.position.x - P.x) * (o.g.position.x - P.x) + (o.g.position.z - P.z) * (o.g.position.z - P.z) > 900;

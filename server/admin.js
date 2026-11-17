@@ -219,6 +219,11 @@ const OPS = {
     await db.audit(actor, 'admin_config', Object.keys(next).join(', '));
     return {};
   },
+  // 백업 파일. 비밀번호 해시가 들어 있으므로 받은 파일은 안전한 곳에 보관해야 한다.
+  async backup(game, b, actor) {
+    await db.audit(actor, 'admin_backup', '전체 내려받기');
+    return { backup: { made_at: new Date().toISOString(), version: 1, data: await db.exportAll() } };
+  },
   async logs(game, b) {
     const action = typeof b.action === 'string' && /^[a-z0-9_]{1,30}$/.test(b.action) ? b.action : null;
     return { list: (await db.listAudit(action)).map(x => [x.id, x.at, x.action, x.detail, x.nickname || '']) };
