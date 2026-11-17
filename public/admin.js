@@ -147,6 +147,8 @@
         guide.value = (r.npc.guide || []).join('\n');
         var notice = el('input', { value: r.notice || '', maxlength: '200', placeholder: '접속할 때 채팅창에 보이는 한 줄 공지 (비우면 없음)', style: 'width:100%' });
         var signup = el('select', {}, [el('option', { value: '1', text: '새 가입 받기' }), el('option', { value: '0', text: '새 가입 닫기' })]);
+        var theme = el('select', {}, [el('option', { value: 'christmas', text: '크리스마스' }), el('option', { value: 'none', text: '꾸미기 없음' })]);
+        theme.value = r.theme === 'none' ? 'none' : 'christmas';
         signup.value = r.signupOpen ? '1' : '0';
         show([
           card('안내원 대사', '로비 안내원의 인사말과 게임 안내 문구입니다.', [hi, el('div', { style: 'height:8px' }), guide,
@@ -154,6 +156,8 @@
               act('config.set', { npc: { hi: hi.value, guide: guide.value.split('\n') } }).then(function () { say('안내원 대사를 저장했습니다.'); });
             } })])]),
           card('공지', '', [notice, el('div', { cls: 'row' }, [el('button', { text: '공지 저장', on: function () { act('config.set', { notice: notice.value }).then(function () { say('공지를 저장했습니다.'); }); } })])]),
+          card('계절 꾸미기', '눈, 크리스마스트리, 산타, 알전구 같은 꾸미기를 켜고 끕니다. 바꾸면 접속 중인 사람에게도 바로 적용됩니다.', [el('div', { cls: 'row' }, [theme,
+            el('button', { text: '저장', on: function () { act('config.set', { theme: theme.value }).then(function () { say('계절 꾸미기를 저장했습니다.'); }); } })])]),
           card('가입', '닫으면 새 계정을 만들 수 없습니다. 이미 가입한 사람은 그대로 들어올 수 있습니다.', [el('div', { cls: 'row' }, [signup,
             el('button', { text: '저장', on: function () { act('config.set', { signupOpen: signup.value === '1' }).then(function () { say('저장했습니다.'); }); } })])])
         ]);

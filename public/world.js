@@ -21,6 +21,8 @@
   var BENCHES = [[-3.75, 22, 1], [3.75, 22, -1]];                // 벤치: x, z, 앉는 쪽 (+1 이면 +x 쪽을 본다)
   var PLANTERS = [[-5.6, 9.8], [5.6, 9.8]];                       // 광장의 둥근 화분
   var BINS = [[-3.75, 20.3], [3.75, 23.7]];                       // 쓰레기통
+  // 크리스마스 꾸미기 소품 자리. 부딪힘 영역은 꾸미기를 켰을 때만 쓴다(서버와 화면이 같은 값을 쓴다).
+  var XMAS = { tree: [-10.5, 21], sleigh: [10.6, 25.4], santa: [8.9, 25.6], snowmen: [[-9.6, 30.5, 1], [9.6, 33, -1]], lobbyTree: [-10.2, 0.8] };
 
   function c(x, z, w, d) { return { x0: x - w / 2, x1: x + w / 2, z0: z - d / 2, z1: z + d / 2 }; }
   var colOut = [c(0, 0, 16, 12)], colIn = [];
@@ -31,6 +33,9 @@
   BENCHES.forEach(function (b) { colOut.push(c(b[0], b[1], 0.8, 1.8)); });
   PLANTERS.forEach(function (p) { colOut.push(c(p[0], p[1], 1.5, 1.5)); });
   BINS.forEach(function (p) { colOut.push(c(p[0], p[1], 0.5, 0.5)); });
+  var XMAS_OUT = [c(XMAS.tree[0], XMAS.tree[1], 4.2, 4.2), c(10.6, 24.3, 2.0, 5.2), c(XMAS.santa[0], XMAS.santa[1], 1.0, 1.0)]
+    .concat(XMAS.snowmen.map(function (s) { return c(s[0], s[1], 1.1, 1.1); }));
+  var XMAS_IN = [c(XMAS.lobbyTree[0], XMAS.lobbyTree[1], 2.6, 2.6)];
   colIn.push(c(0, -3, 7, 1.2));                       // 안내 데스크
   NPCS.forEach(function (n) { colIn.push(c(n[0], n[1], 0.9, 0.9)); });
   colIn.push(c(8.6, 4.5, 1.1, 3), c(-8.6, 5.6, 3, 1.1), c(6.3, 4.5, 1.6, 1.6));   // 소파, 탁자
@@ -85,7 +90,8 @@
     h_beanie: { slot: 'hat', n: '털모자', price: 80 },
     h_party:  { slot: 'hat', n: '고깔모자', price: 60 },
     h_ribbon: { slot: 'hat', n: '리본', price: 60 },
-    h_crown:  { slot: 'hat', n: '왕관', price: 500 }
+    h_crown:  { slot: 'hat', n: '왕관', price: 500 },
+    h_santa:  { slot: 'hat', n: '산타 모자', price: 0 }
   };
   var START_MONEY = 200, EVENT_REWARD_MAX = 1000, EVENT_OPEN_MAX = 10;
   var FURN_CAP = 60;                                   // 층마다 놓을 수 있는 개수 (모바일 성능)
@@ -156,7 +162,7 @@
   var SPAWN = { start: { x: 0, z: 24 }, in: { x: 0, z: 6.6 }, out: { x: 0, z: 9.5 } };
 
   return { LW: LW, LD: LD, LH: LH, R: R, SPEED: SPEED, TREES: TREES, SHOPS: SHOPS, SHOP_Z: SHOP_Z,
-    PLANTS: PLANTS, NPCS: NPCS, LAMPS: LAMPS, FLAG: FLAG, BENCHES: BENCHES, PLANTERS: PLANTERS, BINS: BINS,
+    PLANTS: PLANTS, NPCS: NPCS, LAMPS: LAMPS, FLAG: FLAG, BENCHES: BENCHES, PLANTERS: PLANTERS, BINS: BINS, XMAS: XMAS, XMAS_OUT: XMAS_OUT, XMAS_IN: XMAS_IN,
     FLOOR_MIN: FLOOR_MIN, FLOOR_MAX: FLOOR_MAX, FLOOR_REG_MAX: FLOOR_REG_MAX, FLOOR_CAP: FLOOR_CAP,
     COSM: COSM, START_MONEY: START_MONEY, EVENT_REWARD_MAX: EVENT_REWARD_MAX, EVENT_OPEN_MAX: EVENT_OPEN_MAX,
     FURN: FURN, FURN_CAP: FURN_CAP, furnSize: furnSize, snap: snap, furnRect: furnRect, furnOk: furnOk, seatPos: seatPos,

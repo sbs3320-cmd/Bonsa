@@ -36,10 +36,11 @@ class Game {
     this.postLimit = auth.limiter(3, 60 * 1000);        // 글쓰기: 1분에 3개까지
     this.lockFail = auth.limiter(5, 10 * 60 * 1000);
     // 총관리자가 바꿀 수 있는 설정 (값표, 안내원 대사, 공지, 가입 받기). DB의 settings 에 저장된다.
-    this.live = { prices: {}, npc: { hi: '', guide: [] }, notice: '', signupOpen: true };
+    this.live = { prices: {}, npc: { hi: '', guide: [] }, notice: '', signupOpen: true, theme: 'christmas' };
     this.basePrices = {};
     for (const k of Object.keys(World.FURN)) this.basePrices[k] = World.FURN[k].price;
-    for (const k of Object.keys(World.COSM)) this.basePrices[k] = World.COSM[k].price;   // 12층 비밀번호: 10분 동안 5번 틀리면 잠금
+    for (const k of Object.keys(World.COSM)) this.basePrices[k] = World.COSM[k].price;
+    this.themeCols();   // 12층 비밀번호: 10분 동안 5번 틀리면 잠금
     this.ticks = 0; this.lastOnline = 0;
     this.timer = setInterval(() => this.tick(), TICK_MS);
     this.timer.unref();
@@ -243,7 +244,13 @@ class Game {
   }
 
   // ---- 총관리자 화면에서 부르는 것들 (권한 확인은 admin.js 가 끝낸 뒤에만 불린다) ----
-  liveForClient() { return { prices: this.live.prices, npc: this.live.npc, notice: this.live.notice }; }
+  liveForClient() { return { prices: this.live.prices, npc: this.live.npc, notice: this.live.notice, theme: this.live.theme }; }
+  // 크리스마스 소품은 꾸미기가 켜져 있을 때만 길을 막는다
+  themeCols() {
+    const on = this.live.theme === 'christmas';
+    this.furnCol.out = on ? World.XMAS_OUT : [];
+    this.furnCol.in = on ? World.XMAS_IN : [];
+  }
   // 설정을 검사해서 적용한다. 값표는 서버가 가진 가구·치장 표에 바로 반영된다.
   setLive(next, quiet) {
     const L = this.live;
@@ -259,6 +266,7 @@ class Game {
     }
     if (typeof next.notice === 'string') L.notice = next.notice.replace(/[\u0000-\u001f\u007f]/g, ' ').trim().slice(0, 200);
     if (typeof next.signupOpen === 'boolean') L.signupOpen = next.signupOpen;
+    if (next.theme === 'christmas' || next.theme === 'none') { L.theme = next.theme; this.themeCols(); }
     for (const k of Object.keys(this.basePrices)) {
       const price = Object.prototype.hasOwnProperty.call(L.prices, k) ? L.prices[k] : this.basePrices[k];
       (World.FURN[k] || World.COSM[k]).price = price;

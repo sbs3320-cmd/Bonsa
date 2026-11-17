@@ -209,12 +209,13 @@ const OPS = {
     await db.audit(actor, 'admin_shop', k + ' 값 -> ' + price);
     return {};
   },
-  async config(game) { return { npc: game.live.npc, notice: game.live.notice, signupOpen: game.live.signupOpen }; },
+  async config(game) { return { npc: game.live.npc, notice: game.live.notice, signupOpen: game.live.signupOpen, theme: game.live.theme }; },
   async 'config.set'(game, b, actor) {
     const next = {};
     if (b.npc && typeof b.npc === 'object') next.npc = { hi: b.npc.hi, guide: Array.isArray(b.npc.guide) ? b.npc.guide : [] };
     if (typeof b.notice === 'string') next.notice = b.notice;
     if (typeof b.signupOpen === 'boolean') next.signupOpen = b.signupOpen;
+    if (b.theme === 'christmas' || b.theme === 'none') next.theme = b.theme;
     game.setLive(next); await game.saveLive();
     await db.audit(actor, 'admin_config', Object.keys(next).join(', '));
     return {};
