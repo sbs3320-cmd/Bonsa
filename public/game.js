@@ -19,7 +19,7 @@ function bonsaBoot() {
     '직급: 인턴으로 시작해 사원, 부팀장, 팀장, 부장, 사장 순으로 올라갑니다. 팀장 이상이 아래 직급을 승진시킵니다.',
     '메뉴: 오른쪽 위 메뉴에서 프로필, 사원 명부, 게시판, 음악 설정, 로그아웃을 쓸 수 있어요. 캐릭터를 눌러도 프로필이 열립니다.',
     '이벤트: 메뉴의 이벤트에서 참가 신청을 하면 부팀장 이상이 성공을 판정하고, 성공하면 코인을 받습니다.',
-    '상점: 메뉴의 상점에서 코인으로 몸 색과 모자를 사고, 꾸미기에서 가구를 삽니다. 처음에 200코인을 드려요.',
+    '상점: 메뉴의 상점에서 코인으로 털 색과 모자를 사고, 꾸미기에서 가구를 삽니다. 처음에 200코인을 드려요.',
     '12층 사장실은 비밀번호가 걸려 있을 수 있습니다. 그럼 즐거운 회사 생활 되세요!'
   ];
 
@@ -141,6 +141,7 @@ function bonsaBoot() {
   var gEye = new THREE.SphereGeometry(0.055, 8, 8);
   var gFoot = new THREE.SphereGeometry(0.17, 12, 8);
   var gArm = new THREE.SphereGeometry(0.13, 10, 8);
+  var gPuff2 = new THREE.SphereGeometry(0.11, 8, 6);          // 작은 털뭉치
   var gStrap = new THREE.TorusGeometry(0.31, 0.04, 8, 24);
   var gLan = new THREE.BoxGeometry(0.05, 0.26, 0.02);       // 목걸이 줄
   var gCard = new THREE.BoxGeometry(0.34, 0.42, 0.03), gCardTop = new THREE.BoxGeometry(0.34, 0.11, 0.036);
@@ -157,7 +158,9 @@ function bonsaBoot() {
   var gUmbPole = new THREE.CylinderGeometry(0.025, 0.025, 1.5, 6);
   var UMB_COLORS = [0xe5534b, 0x3b82c4, 0xf2b441, 0x3fa56b, 0x8e6bd1, 0xf08aa8];
   var umbMats = UMB_COLORS.map(function (c) { return new THREE.MeshLambertMaterial({ color: new THREE.Color(c).convertSRGBToLinear(), side: THREE.DoubleSide }); });
-  var BODY_COLORS = [0x6fa8ff, 0xf2a65a, 0x7fc8a9, 0xe58fb1, 0xb39ddb, 0xf0d264, 0x80cbc4, 0xef9a9a];
+  // 기본 털 색 (상점에서 색을 사지 않았을 때 번호에 따라 정해진다)
+  var BODY_COLORS = [0xfff6e6, 0xffe1e8, 0xe1eeff, 0xe6f6dc, 0xfff0c2, 0xece1ff, 0xdff5f1, 0xffe9d9];
+  var FACE = 0xffe2cf, EAR = 0xf7c9b6, HOOF = 0x8a6a55;        // 얼굴과 손, 귀, 발굽
   function setTag(g, text) {
     dropSprite(g.userData.tag);
     var tag = labelSprite(text, 0.42, { bg: 'rgba(20,28,40,0.78)', fs: 44, padX: 22, padY: 12 });
@@ -170,27 +173,46 @@ function bonsaBoot() {
     b.position.y = 2.9; g.add(b);
     g.userData.bubble = b; g.userData.bubbleUntil = performance.now() + 5000;
   }
+  // 캐릭터: 두 발로 서는 양 모양의 사원. 직접 디자인한 모습이다.
+  // 보송보송한 털 모자(후드) 속에 살구색 얼굴이 쏙 나와 있고, 옆으로 처진 귀와 분홍 코, 꼬리 털뭉치가 있다.
+  // 털 색(wool)은 상점의 색 치장으로 바뀌고, 얼굴·손·발굽 색은 그대로다.
   function makeCharacter(color, tagText, umbIndex) {
-    var g = new THREE.Group();
-    var body = new THREE.Mesh(gBody, mat(color));
-    body.scale.set(1, 1.1, 0.92); body.position.y = 0.68; g.add(body);
-    var head = new THREE.Mesh(gHead, mat(color));
-    head.position.y = 1.42; g.add(head);
+    var g = new THREE.Group(), wool = [];
+    function fluff(geo, x, y, z, sx, sy, sz) {                 // 털 조각: 색 치장이 적용되는 부분
+      var m = new THREE.Mesh(geo, mat(color));
+      m.position.set(x, y, z); if (sx) m.scale.set(sx, sy, sz); g.add(m); wool.push(m); return m;
+    }
+    var body = fluff(gBody, 0, 0.68, 0, 1, 1.1, 0.92);
+    var head = fluff(gHead, 0, 1.47, -0.08, 1.05, 1.05, 1.05);                  // 털 후드
+    var face = part(gHead, FACE, 0, 1.40, 0.06, g); face.scale.set(0.85, 0.85, 0.85);
     var detail = [];                                     // 멀리서는 안 보이는 작은 부품들 (멀면 숨겨서 가볍게)
-    [-0.14, 0.14].forEach(function (x) {
-      var e = new THREE.Mesh(gEye, mat(0x1c2430));
-      e.position.set(x, 1.47, 0.36); g.add(e); detail.push(e);
+    // 얼굴 둘레의 털뭉치와 정수리 털
+    [-20, 15, 50, 90, 130, 165, 200].forEach(function (deg) {
+      var r = deg * Math.PI / 180;
+      detail.push(fluff(gPuff2, Math.cos(r) * 0.33, 1.44 + Math.sin(r) * 0.33, 0.2, 1, 1, 1));
     });
+    detail.push(fluff(gPuff2, 0, 1.85, 0.08, 0.9, 0.9, 0.9), fluff(gPuff2, -0.1, 1.81, 0.14, 0.8, 0.8, 0.8), fluff(gPuff2, 0.1, 1.81, 0.14, 0.8, 0.8, 0.8));
+    detail.push(fluff(gPuff2, 0, 0.55, -0.5, 1.2, 1.2, 1.2));                   // 꼬리
+    // 옆으로 처진 귀
+    [-1, 1].forEach(function (sd) {
+      var ear = part(gHead, EAR, sd * 0.43, 1.40, 0.04, g);
+      ear.scale.set(0.42, 0.2, 0.28); ear.rotation.z = sd * -0.55;
+    });
+    [-0.13, 0.13].forEach(function (x) {
+      var e = new THREE.Mesh(gEye, mat(0x2a2320));
+      e.position.set(x, 1.45, 0.372); e.scale.set(1.15, 1.35, 1); g.add(e); detail.push(e);
+    });
+    var nose = part(gEye, 0xf08aa0, 0, 1.385, 0.4, g); nose.scale.set(1.1, 0.75, 0.8); detail.push(nose);
     var feet = [];
     [-0.2, 0.2].forEach(function (x) {
-      var f = new THREE.Mesh(gFoot, mat(0x39424f));
-      f.scale.set(1, 0.6, 1.3); f.position.set(x, 0.1, 0.05); g.add(f); feet.push(f);
+      var f = new THREE.Mesh(gFoot, mat(HOOF));
+      f.scale.set(1, 0.7, 1.25); f.position.set(x, 0.1, 0.05); g.add(f); feet.push(f);
     });
-    // 얼굴: 볼과 입
-    [-0.25, 0.25].forEach(function (x) {
-      var ck = part(gCheek, 0xf59aa0, x, 1.36, 0.29, g); ck.scale.set(1, 0.7, 0.5); detail.push(ck);
+    // 볼과 입
+    [-0.22, 0.22].forEach(function (x) {
+      var ck = part(gCheek, 0xf7a3ab, x, 1.34, 0.3, g); ck.scale.set(1, 0.7, 0.5); detail.push(ck);
     });
-    var mouth = part(gMouth, 0x1c2430, 0, 1.36, 0.385, g); mouth.rotation.z = Math.PI;
+    var mouth = part(gMouth, 0x2a2320, 0, 1.335, 0.39, g); mouth.rotation.z = Math.PI; mouth.scale.set(0.8, 0.8, 0.8);
     // 사원증: 목에 두른 줄이 앞으로 모여 내려오고, 그 끝에 큼직한 카드가 달린다
     var strap = part(gStrap, LANYARD, 0, 1.09, 0.04, g);
     strap.rotation.x = Math.PI / 2 - 0.22;
@@ -207,7 +229,7 @@ function bonsaBoot() {
     // 팔, 발밑 그림자, 우산(평소에는 숨김)
     var arms = [];
     [-0.52, 0.52].forEach(function (x) {
-      var a = new THREE.Mesh(gArm, mat(color));
+      var a = new THREE.Mesh(gArm, mat(FACE));
       a.scale.set(1, 1.5, 1); a.position.set(x, 0.78, 0.02); g.add(a); arms.push(a);
     });
     var sh = new THREE.Mesh(gShadow, shadowMat);
@@ -219,7 +241,7 @@ function bonsaBoot() {
     pole.position.set(0.4, 1.85, 0.05); umb.add(pole);
     umb.visible = false; g.add(umb);
     g.userData.feet = feet; g.userData.arms = arms; g.userData.shadow = sh; g.userData.umb = umb;
-    g.userData.skin = [body, head, arms[0], arms[1]]; g.userData.hat = null;
+    g.userData.skin = wool; g.userData.hat = null;
     g.userData.detail = detail; g.userData.far = false;
     setTag(g, tagText);
     return g;
@@ -1257,7 +1279,7 @@ function bonsaBoot() {
         if (cls) b.className = cls;
         box0.appendChild(b);
       }
-      row('', slot === 'color' ? '기본 색' : '모자 없음', null, worn ? '바꾸기' : '착용 중', worn ? '' : 'here');
+      row('', slot === 'color' ? '기본 털 색' : '모자 없음', null, worn ? '바꾸기' : '착용 중', worn ? '' : 'here');
       Object.keys(W.COSM).forEach(function (k) {
         var it = W.COSM[k];
         if (it.slot !== slot) return;

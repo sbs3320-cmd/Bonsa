@@ -199,7 +199,7 @@ const OPS = {
   async shop(game) {
     const row = (k, it, kind) => [k, kind, it.n, it.price, game.basePrices[k]];
     return { list: Object.keys(World.FURN).map(k => row(k, World.FURN[k], '가구'))
-      .concat(Object.keys(World.COSM).map(k => row(k, World.COSM[k], World.COSM[k].slot === 'color' ? '몸 색' : '모자'))) };
+      .concat(Object.keys(World.COSM).map(k => row(k, World.COSM[k], World.COSM[k].slot === 'color' ? '털 색' : '모자'))) };
   },
   async 'shop.price'(game, b, actor) {
     const k = String(b.item), price = int(b.price);
