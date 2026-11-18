@@ -76,7 +76,7 @@
     wall:  { n: '칸막이', w: 2, d: 1, solid: true, price: 20 },
     rug:   { n: '러그', w: 3, d: 2, solid: false, price: 40 }
   };
-  // 상점에서 사는 치장. slot: 몸 색(color) 또는 모자(hat). 가격 단위는 코인.
+  // 상점에서 사는 치장. slot: 털 색(color), 모자(hat), 자켓(jacket), 바지(pants), 넥타이(tie). 가격 단위는 코인.
   var COSM = {
     c_sky:    { slot: 'color', n: '하늘색', hex: 0x6fa8ff, price: 50 },
     c_orange: { slot: 'color', n: '귤색', hex: 0xf2a65a, price: 50 },
@@ -91,8 +91,40 @@
     h_party:  { slot: 'hat', n: '고깔모자', price: 60 },
     h_ribbon: { slot: 'hat', n: '리본', price: 60 },
     h_crown:  { slot: 'hat', n: '왕관', price: 500 },
-    h_santa:  { slot: 'hat', n: '산타 모자', price: 0 }
+    h_santa:  { slot: 'hat', n: '산타 모자', price: 0 },
+    // 정장. def: true 는 처음부터 입고 있는 기본 옷 (사지 않아도 입을 수 있다)
+    j_navy:     { slot: 'jacket', n: '남색 자켓', hex: 0x2c3e66, price: 0, def: true },
+    j_charcoal: { slot: 'jacket', n: '진회색 자켓', hex: 0x41454d, price: 100 },
+    j_black:    { slot: 'jacket', n: '검정 자켓', hex: 0x24262b, price: 100 },
+    j_grey:     { slot: 'jacket', n: '회색 자켓', hex: 0x8c929c, price: 100 },
+    j_beige:    { slot: 'jacket', n: '베이지 자켓', hex: 0xcdb592, price: 120 },
+    j_brown:    { slot: 'jacket', n: '갈색 자켓', hex: 0x7a5236, price: 120 },
+    j_green:    { slot: 'jacket', n: '올리브 자켓', hex: 0x5e6b45, price: 120 },
+    j_wine:     { slot: 'jacket', n: '와인 자켓', hex: 0x7a2636, price: 150 },
+    j_sky:      { slot: 'jacket', n: '하늘색 자켓', hex: 0x86b4e0, price: 150 },
+    j_pink:     { slot: 'jacket', n: '분홍 자켓', hex: 0xe8a2b8, price: 150 },
+    j_white:    { slot: 'jacket', n: '흰색 자켓', hex: 0xefede6, price: 200 },
+    p_charcoal: { slot: 'pants', n: '진회색 바지', hex: 0x3d4049, price: 0, def: true },
+    p_navy:     { slot: 'pants', n: '남색 바지', hex: 0x2a3858, price: 60 },
+    p_black:    { slot: 'pants', n: '검정 바지', hex: 0x222327, price: 60 },
+    p_grey:     { slot: 'pants', n: '회색 바지', hex: 0x878d97, price: 60 },
+    p_beige:    { slot: 'pants', n: '베이지 바지', hex: 0xc6ae8a, price: 80 },
+    p_brown:    { slot: 'pants', n: '갈색 바지', hex: 0x6e4a31, price: 80 },
+    p_white:    { slot: 'pants', n: '흰색 바지', hex: 0xebe9e2, price: 120 },
+    t_red:      { slot: 'tie', n: '빨간 넥타이', hex: 0xd0343c, price: 0, def: true },
+    t_navy:     { slot: 'tie', n: '남색 넥타이', hex: 0x24345e, price: 30 },
+    t_blue:     { slot: 'tie', n: '파란 넥타이', hex: 0x2f7fe0, price: 30 },
+    t_sky:      { slot: 'tie', n: '하늘색 넥타이', hex: 0x8cc6f0, price: 30 },
+    t_green:    { slot: 'tie', n: '초록 넥타이', hex: 0x2f9a5b, price: 30 },
+    t_yellow:   { slot: 'tie', n: '노란 넥타이', hex: 0xf2c230, price: 30 },
+    t_orange:   { slot: 'tie', n: '주황 넥타이', hex: 0xf08a2c, price: 30 },
+    t_pink:     { slot: 'tie', n: '분홍 넥타이', hex: 0xf08fb0, price: 30 },
+    t_purple:   { slot: 'tie', n: '보라 넥타이', hex: 0x8a5cc9, price: 30 },
+    t_black:    { slot: 'tie', n: '검정 넥타이', hex: 0x1f2024, price: 30 },
+    t_gold:     { slot: 'tie', n: '금색 넥타이', hex: 0xd4a72c, price: 80 }
   };
+  var SUIT_DEF = { jacket: 'j_navy', pants: 'p_charcoal', tie: 't_red' };
+  var LOOK_SLOTS = ['color', 'hat', 'jacket', 'pants', 'tie'];
   var START_MONEY = 200, EVENT_REWARD_MAX = 1000, EVENT_OPEN_MAX = 10;
   var FURN_CAP = 60;                                   // 층마다 놓을 수 있는 개수 (모바일 성능)
   // 가구를 놓을 수 없는 자리: 엘리베이터 앞, 안내판 앞, 게시판 앞
@@ -164,7 +196,7 @@
   return { LW: LW, LD: LD, LH: LH, R: R, SPEED: SPEED, TREES: TREES, SHOPS: SHOPS, SHOP_Z: SHOP_Z,
     PLANTS: PLANTS, NPCS: NPCS, LAMPS: LAMPS, FLAG: FLAG, BENCHES: BENCHES, PLANTERS: PLANTERS, BINS: BINS, XMAS: XMAS, XMAS_OUT: XMAS_OUT, XMAS_IN: XMAS_IN,
     FLOOR_MIN: FLOOR_MIN, FLOOR_MAX: FLOOR_MAX, FLOOR_REG_MAX: FLOOR_REG_MAX, FLOOR_CAP: FLOOR_CAP,
-    COSM: COSM, START_MONEY: START_MONEY, EVENT_REWARD_MAX: EVENT_REWARD_MAX, EVENT_OPEN_MAX: EVENT_OPEN_MAX,
+    COSM: COSM, SUIT_DEF: SUIT_DEF, LOOK_SLOTS: LOOK_SLOTS, START_MONEY: START_MONEY, EVENT_REWARD_MAX: EVENT_REWARD_MAX, EVENT_OPEN_MAX: EVENT_OPEN_MAX,
     FURN: FURN, FURN_CAP: FURN_CAP, furnSize: furnSize, snap: snap, furnRect: furnRect, furnOk: furnOk, seatPos: seatPos,
     ELEV: ELEV, ELEV_OUT: ELEV_OUT, KIOSK: KIOSK, floorOf: floorOf, areaOf: areaOf, nearElev: nearElev, blocked: blocked, door: door, SPAWN: SPAWN };
 });

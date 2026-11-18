@@ -187,120 +187,194 @@ function bonsaBoot() {
       new THREE.MeshBasicMaterial({ map: t.tex, transparent: true }));
   }
 
-  /* ---------- 캐릭터 (오리지널 디자인: 둥근 몸 + 사원증) ---------- */
-  var gBody = new THREE.SphereGeometry(0.5, 22, 16);
-  var gHead = new THREE.SphereGeometry(0.4, 22, 16);
-  var gEye = new THREE.SphereGeometry(0.055, 8, 8);
-  var gFoot = new THREE.SphereGeometry(0.17, 12, 8);
-  var gArm = new THREE.SphereGeometry(0.13, 10, 8);
+  /* ---------- 캐릭터 (오리지널 디자인: 머리가 큰 양 사원 + 정장 + 사원증) ---------- */
+  // 몸통(자켓) 타원체의 크기. 셔츠·넥타이·옷깃은 이 표면을 따라 붙인다.
+  var TOR = { y: 0.66, ax: 0.39, ay: 0.37, az: 0.35 };
+  var HOOD = { y: 1.5, z: -0.06, r: 0.57 }, FACEC = { y: 1.43, z: 0.09, r: 0.47 };
+  var gTorso = new THREE.SphereGeometry(0.5, 24, 16);
+  var gHood = new THREE.SphereGeometry(HOOD.r, 24, 18);
+  var gFace = new THREE.SphereGeometry(FACEC.r, 24, 18);
+  var gEarS = new THREE.SphereGeometry(0.4, 12, 10);
+  var gEye = new THREE.SphereGeometry(0.055, 10, 8), gShine = new THREE.SphereGeometry(0.02, 6, 5);
   var gPuff2 = new THREE.SphereGeometry(0.11, 8, 6);          // 작은 털뭉치
-  var gStrap = new THREE.TorusGeometry(0.31, 0.04, 8, 24);
-  var gLan = new THREE.BoxGeometry(0.05, 0.26, 0.02);       // 목걸이 줄
-  var gCard = new THREE.BoxGeometry(0.34, 0.42, 0.03), gCardTop = new THREE.BoxGeometry(0.34, 0.11, 0.036);
-  var gPhoto = new THREE.BoxGeometry(0.13, 0.15, 0.036), gLine = new THREE.BoxGeometry(0.11, 0.028, 0.036);
-  var gClip = new THREE.BoxGeometry(0.08, 0.07, 0.04);
-  var gCheek = new THREE.SphereGeometry(0.075, 10, 8), gMouth = new THREE.TorusGeometry(0.06, 0.014, 5, 10, Math.PI);
-  var LANYARD = 0x2f9bff;
+  var gSleeve = new THREE.SphereGeometry(0.12, 10, 8), gHand = new THREE.SphereGeometry(0.085, 10, 8);
+  var gCuff = new THREE.CylinderGeometry(0.085, 0.085, 0.05, 10);
+  var gLeg = new THREE.CylinderGeometry(0.115, 0.1, 0.3, 10), gShoe = new THREE.SphereGeometry(0.15, 12, 8);
+  var gLan = new THREE.BoxGeometry(0.04, 1, 0.02);          // 목걸이 줄 (길이는 scale.y)
+  var gCard = new THREE.BoxGeometry(0.3, 0.36, 0.03), gCardTop = new THREE.BoxGeometry(0.3, 0.09, 0.036);
+  var gPhoto = new THREE.BoxGeometry(0.11, 0.13, 0.036), gLine = new THREE.BoxGeometry(0.1, 0.024, 0.036);
+  var gClip = new THREE.BoxGeometry(0.07, 0.06, 0.04), gPocket = new THREE.BoxGeometry(0.085, 0.045, 0.02);
+  var gCheek = new THREE.SphereGeometry(0.075, 10, 8), gMouth = new THREE.TorusGeometry(0.05, 0.013, 5, 10, Math.PI);
+  var gKnot = new THREE.SphereGeometry(0.05, 10, 8);
+  var LANYARD = 0x2f9bff, SHIRT = 0xfbfbf8, SHOE = 0x3a2f2c;
+  // 몸통 표면에 붙는 얇은 조각 (셔츠의 V, 넥타이, 옷깃). v 는 위(0)에서 아래(1), 폭은 각도(라디안)로 준다.
+  function torsoPatch(t0, t1, range, k, nv) {
+    var nu = 6, pos = [], idx = [], i, j, v, th, r, ph;
+    nv = nv || 12;
+    for (j = 0; j <= nv; j++) {
+      v = j / nv; th = t0 + (t1 - t0) * v; r = range(v);
+      for (i = 0; i <= nu; i++) {
+        ph = r[0] + (r[1] - r[0]) * i / nu;
+        pos.push(Math.sin(th) * Math.sin(ph) * TOR.ax * k, TOR.y + Math.cos(th) * TOR.ay * k, Math.sin(th) * Math.cos(ph) * TOR.az * k);
+      }
+    }
+    for (j = 0; j < nv; j++) for (i = 0; i < nu; i++) {
+      var a = j * (nu + 1) + i, b = a + 1, c = a + nu + 1, d = c + 1;
+      idx.push(a, c, b, b, c, d);
+    }
+    var geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    geo.setIndex(idx); geo.computeVertexNormals();
+    return geo;
+  }
+  function vHalf(v) { return 0.5 * (1 - v); }                        // 셔츠가 보이는 V의 반폭
+  var V_T0 = 0.35, V_T1 = 1.62;
+  var gShirt = torsoPatch(V_T0, V_T1, function (v) { return [-vHalf(v), vHalf(v)]; }, 1.012);
+  var gLapelL = torsoPatch(V_T0, V_T1, function (v) { var h = vHalf(v); return [-h - 0.17 + v * 0.1, -h]; }, 1.007);
+  var gLapelR = torsoPatch(V_T0, V_T1, function (v) { var h = vHalf(v); return [h, h + 0.17 - v * 0.1]; }, 1.007);
+  // 넥타이: 매듭 아래가 좁았다가 점점 넓어지고 끝이 뾰족하다
+  var gTie = torsoPatch(0.82, 1.5, function (v) {
+    var w = v > 0.86 ? 0.13 * (1 - v) / 0.14 : 0.055 + 0.075 * v / 0.86;
+    return [-w, w];
+  }, 1.024, 16);
+  function onTorso(th, ph, k) {
+    return new THREE.Vector3(Math.sin(th) * Math.sin(ph) * TOR.ax * k, TOR.y + Math.cos(th) * TOR.ay * k, Math.sin(th) * Math.cos(ph) * TOR.az * k);
+  }
   function part(geo, color, x, y, z, parent) {
     var m = new THREE.Mesh(geo, mat(color)); m.position.set(x, y, z); parent.add(m); return m;
+  }
+  // 두 점 사이를 잇는 막대 (목걸이 줄)
+  var UP = new THREE.Vector3(0, 1, 0);
+  function rod(geo, color, a, b, parent) {
+    var m = new THREE.Mesh(geo, mat(color)), dx = b.x - a.x, dy = b.y - a.y, dz = b.z - a.z, len = Math.sqrt(dx * dx + dy * dy + dz * dz);
+    m.position.set((a.x + b.x) / 2, (a.y + b.y) / 2, (a.z + b.z) / 2);
+    m.scale.y = len; m.quaternion.setFromUnitVectors(UP, new THREE.Vector3(dx / len, dy / len, dz / len));
+    parent.add(m); return m;
+  }
+  function shade(hex, k) {                                          // 같은 색을 조금 어둡게 (옷깃)
+    var r = Math.round(((hex >> 16) & 255) * k), g = Math.round(((hex >> 8) & 255) * k), b = Math.round((hex & 255) * k);
+    return (r << 16) | (g << 8) | b;
   }
   var gShadow = new THREE.CircleGeometry(0.58, 20);
   var shadowMat = new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.2, depthWrite: false });
   var gUmbTop = new THREE.ConeGeometry(1.05, 0.4, 12, 1, true);
-  var gUmbPole = new THREE.CylinderGeometry(0.025, 0.025, 1.5, 6);
+  var gUmbPole = new THREE.CylinderGeometry(0.025, 0.025, 1.6, 6);
   var UMB_COLORS = [0xe5534b, 0x3b82c4, 0xf2b441, 0x3fa56b, 0x8e6bd1, 0xf08aa8];
   var umbMats = UMB_COLORS.map(function (c) { return new THREE.MeshLambertMaterial({ color: new THREE.Color(c).convertSRGBToLinear(), side: THREE.DoubleSide }); });
   // 기본 털 색 (상점에서 색을 사지 않았을 때 번호에 따라 정해진다)
   var BODY_COLORS = [0xfff6e6, 0xffe1e8, 0xe1eeff, 0xe6f6dc, 0xfff0c2, 0xece1ff, 0xdff5f1, 0xffe9d9];
-  var FACE = 0xffe2cf, EAR = 0xf7c9b6, HOOF = 0x8a6a55;        // 얼굴과 손, 귀, 발굽
-  function setTag(g, text) {
-    dropSprite(g.userData.tag);
+  var FACE = 0xffe2cf, EAR = 0xf7c9b6;                          // 얼굴과 손, 귀
+  var SIT_Y = 0.22, TAG_Y = 2.5, TAG_Y_UMB = 3.2, BUBBLE_Y = 3.15, BUBBLE_Y_UMB = 3.85;
+  function setTag(g, text, rep) {
+    dropSprite(g.userData.tag); dropSprite(g.userData.repTag); g.userData.repTag = null;
     var tag = labelSprite(text, 0.42, { bg: 'rgba(20,28,40,0.78)', fs: 44, padX: 22, padY: 12 });
-    tag.position.y = 2.25; g.add(tag); g.userData.tag = tag;
+    tag.position.y = TAG_Y; g.add(tag); g.userData.tag = tag; g.userData.tagText = text;
+    if (rep) {                                                     // 층 대표자: 이름표 위에 금색 띠
+      var rt = labelSprite('★ ' + rep + '층 대표', 0.32, { bg: 'rgba(214,160,30,0.95)', color: '#ffffff', fs: 40, padX: 18, padY: 8 });
+      rt.position.y = TAG_Y + 0.4; g.add(rt); g.userData.repTag = rt;
+    }
+    g.userData.rep = rep || 0;
   }
   function say(g, text) {
     dropSprite(g.userData.bubble);
     var short = text.length > 28 ? text.slice(0, 28) + '…' : text;
     var b = labelSprite(short, 0.46, { bg: '#ffffff', color: '#1c2430', fs: 44, radius: 26 });
-    b.position.y = 2.9; g.add(b);
+    b.position.y = BUBBLE_Y + (g.userData.repTag ? 0.4 : 0); g.add(b);
     g.userData.bubble = b; g.userData.bubbleUntil = performance.now() + 5000;
   }
   // 캐릭터: 두 발로 서는 양 모양의 사원. 직접 디자인한 모습이다.
-  // 보송보송한 털 모자(후드) 속에 살구색 얼굴이 쏙 나와 있고, 옆으로 처진 귀와 분홍 코, 꼬리 털뭉치가 있다.
-  // 털 색(wool)은 상점의 색 치장으로 바뀌고, 얼굴·손·발굽 색은 그대로다.
+  // 큼직한 털 후드 속에 살구색 얼굴이 쏙 나와 있고, 반짝이는 큰 눈, 처진 귀, 분홍 코가 있다.
+  // 몸에는 정장(자켓, 셔츠, 넥타이, 바지, 구두)을 입고 목에 사원증을 건다.
+  // 털 색은 상점의 색 치장, 자켓·바지·넥타이 색은 상점의 정장 치장으로 바뀐다.
   function makeCharacter(color, tagText, umbIndex) {
-    var g = new THREE.Group(), wool = [];
-    function fluff(geo, x, y, z, sx, sy, sz) {                 // 털 조각: 색 치장이 적용되는 부분
+    var g = new THREE.Group(), wool = [], detail = [];
+    function fluff(geo, x, y, z, s) {                             // 털 조각: 색 치장이 적용되는 부분
       var m = new THREE.Mesh(geo, mat(color));
-      m.position.set(x, y, z); if (sx) m.scale.set(sx, sy, sz); g.add(m); wool.push(m); return m;
+      m.position.set(x, y, z); if (s) m.scale.set(s, s, s); g.add(m); wool.push(m); return m;
     }
-    var body = fluff(gBody, 0, 0.68, 0, 1, 1.1, 0.92);
-    var head = fluff(gHead, 0, 1.47, -0.08, 1.05, 1.05, 1.05);                  // 털 후드
-    var face = part(gHead, FACE, 0, 1.40, 0.06, g); face.scale.set(0.85, 0.85, 0.85);
-    var detail = [];                                     // 멀리서는 안 보이는 작은 부품들 (멀면 숨겨서 가볍게)
-    // 얼굴 둘레의 털뭉치와 정수리 털
-    [-20, 15, 50, 90, 130, 165, 200].forEach(function (deg) {
-      var r = deg * Math.PI / 180;
-      detail.push(fluff(gPuff2, Math.cos(r) * 0.33, 1.44 + Math.sin(r) * 0.33, 0.2, 1, 1, 1));
+    function onHood(x, y) { var q = HOOD.r * HOOD.r - x * x - (y - HOOD.y) * (y - HOOD.y); return HOOD.z + Math.sqrt(Math.max(0.03, q)); }
+    function onFace(x, y) { var q = FACEC.r * FACEC.r - x * x - (y - FACEC.y) * (y - FACEC.y); return FACEC.z + Math.sqrt(Math.max(0.01, q)); }
+    // 머리: 털 후드 + 얼굴
+    fluff(gHood, 0, HOOD.y, HOOD.z);
+    part(gFace, FACE, 0, FACEC.y, FACEC.z, g);
+    [-25, 15, 50, 90, 130, 165, 205].forEach(function (deg) {       // 얼굴 둘레 털뭉치
+      var r = deg * Math.PI / 180, x = Math.cos(r) * 0.45, y = 1.45 + Math.sin(r) * 0.45;
+      detail.push(fluff(gPuff2, x, y, onHood(x, y) - 0.05, 1.35));
     });
-    detail.push(fluff(gPuff2, 0, 1.85, 0.08, 0.9, 0.9, 0.9), fluff(gPuff2, -0.1, 1.81, 0.14, 0.8, 0.8, 0.8), fluff(gPuff2, 0.1, 1.81, 0.14, 0.8, 0.8, 0.8));
-    detail.push(fluff(gPuff2, 0, 0.55, -0.5, 1.2, 1.2, 1.2));                   // 꼬리
-    // 옆으로 처진 귀
-    [-1, 1].forEach(function (sd) {
-      var ear = part(gHead, EAR, sd * 0.43, 1.40, 0.04, g);
-      ear.scale.set(0.42, 0.2, 0.28); ear.rotation.z = sd * -0.55;
+    detail.push(fluff(gPuff2, 0, 2.03, 0.06, 1.2), fluff(gPuff2, -0.13, 1.99, 0.14, 1.05), fluff(gPuff2, 0.13, 1.99, 0.14, 1.05));
+    [-1, 1].forEach(function (sd) {                                // 옆으로 처진 귀
+      var ear = part(gEarS, EAR, sd * 0.6, 1.42, 0.02, g);
+      ear.scale.set(0.55, 0.26, 0.36); ear.rotation.z = sd * -0.55;
     });
-    [-0.13, 0.13].forEach(function (x) {
-      var e = new THREE.Mesh(gEye, mat(0x2a2320));
-      e.position.set(x, 1.45, 0.372); e.scale.set(1.15, 1.35, 1); g.add(e); detail.push(e);
+    [-0.165, 0.165].forEach(function (x) {                          // 크고 반짝이는 눈
+      var e = part(gEye, 0x2a2320, x, 1.47, onFace(x, 1.47) - 0.02, g); e.scale.set(1.5, 1.85, 1);
+      var s = part(gShine, 0xffffff, x + 0.03, 1.51, onFace(x + 0.03, 1.51) + 0.03, g);
+      detail.push(e, s);
     });
-    var nose = part(gEye, 0xf08aa0, 0, 1.385, 0.4, g); nose.scale.set(1.1, 0.75, 0.8); detail.push(nose);
-    var feet = [];
-    [-0.2, 0.2].forEach(function (x) {
-      var f = new THREE.Mesh(gFoot, mat(HOOF));
-      f.scale.set(1, 0.7, 1.25); f.position.set(x, 0.1, 0.05); g.add(f); feet.push(f);
+    var nose = part(gEye, 0xf08aa0, 0, 1.39, onFace(0, 1.39) - 0.01, g); nose.scale.set(1.2, 0.8, 0.8); detail.push(nose);
+    [-0.27, 0.27].forEach(function (x) {
+      var ck = part(gCheek, 0xf7a3ab, x, 1.36, onFace(x, 1.36) - 0.03, g); ck.scale.set(1.1, 0.7, 0.5); detail.push(ck);
     });
-    // 볼과 입
-    [-0.22, 0.22].forEach(function (x) {
-      var ck = part(gCheek, 0xf7a3ab, x, 1.34, 0.3, g); ck.scale.set(1, 0.7, 0.5); detail.push(ck);
-    });
-    var mouth = part(gMouth, 0x2a2320, 0, 1.335, 0.39, g); mouth.rotation.z = Math.PI; mouth.scale.set(0.8, 0.8, 0.8);
-    // 사원증: 목에 두른 줄이 앞으로 모여 내려오고, 그 끝에 큼직한 카드가 달린다
-    var strap = part(gStrap, LANYARD, 0, 1.09, 0.04, g);
-    strap.rotation.x = Math.PI / 2 - 0.22;
-    var l1 = part(gLan, LANYARD, -0.1, 1.02, 0.4, g); l1.rotation.set(0.5, 0, -0.72);
-    var l2 = part(gLan, LANYARD, 0.1, 1.02, 0.4, g); l2.rotation.set(0.5, 0, 0.72);
-    detail.push(mouth, strap, l1, l2, part(gClip, 0xc9d0da, 0, 0.94, 0.47, g));
+    var mouth = part(gMouth, 0x2a2320, 0, 1.335, onFace(0, 1.335) - 0.005, g); mouth.rotation.z = Math.PI; detail.push(mouth);
+    // 몸: 자켓, 셔츠 V, 옷깃, 넥타이, 행커치프
+    var torso = part(gTorso, 0x2c3e66, 0, TOR.y, 0, g); torso.scale.set(TOR.ax / 0.5, TOR.ay / 0.5, TOR.az / 0.5);
+    var shirt = part(gShirt, SHIRT, 0, 0, 0, g);
+    var lapL = part(gLapelL, 0x22314f, 0, 0, 0, g), lapR = part(gLapelR, 0x22314f, 0, 0, 0, g);
+    var tie = part(gTie, 0xd0343c, 0, 0, 0, g);
+    var kp = onTorso(0.86, 0, 1.03), knot = part(gKnot, 0xd0343c, kp.x, kp.y, kp.z, g); knot.scale.set(1.25, 1, 0.6);
+    var pp = onTorso(1.2, 0.62, 1.01), pocket = part(gPocket, 0xffffff, pp.x, pp.y, pp.z, g); pocket.rotation.y = 0.55;
+    detail.push(lapL, lapR, pocket);
+    detail.push(fluff(gPuff2, 0, 0.42, -0.32, 1.15));              // 꼬리 (자켓 뒤로 쏙)
+    // 사원증: 목에서 내려온 줄 두 가닥이 가슴 앞 클립에 모이고, 그 아래 카드가 달린다
+    var clip = new THREE.Vector3(0, 0.675, 0.375);
+    detail.push(rod(gLan, LANYARD, new THREE.Vector3(-0.15, 0.93, 0.25), new THREE.Vector3(-0.035, clip.y + 0.02, clip.z), g));
+    detail.push(rod(gLan, LANYARD, new THREE.Vector3(0.15, 0.93, 0.25), new THREE.Vector3(0.035, clip.y + 0.02, clip.z), g));
+    detail.push(part(gClip, 0xc9d0da, clip.x, clip.y, clip.z, g));
     var badge = new THREE.Group();
     part(gCard, 0xffffff, 0, 0, 0, badge);
-    part(gCardTop, LANYARD, 0, 0.155, 0, badge);
-    part(gPhoto, 0xffd9a8, -0.08, -0.03, 0, badge);
-    part(gLine, 0x8a94a3, 0.08, 0.0, 0, badge); part(gLine, 0xb7bfca, 0.08, -0.06, 0, badge);
-    part(gLine, 0xb7bfca, 0, -0.16, 0, badge).scale.x = 2.4;
-    badge.position.set(0, 0.71, 0.5); badge.rotation.x = -0.08; g.add(badge); detail.push(badge);
-    // 팔, 발밑 그림자, 우산(평소에는 숨김)
-    var arms = [];
-    [-0.52, 0.52].forEach(function (x) {
-      var a = new THREE.Mesh(gArm, mat(FACE));
-      a.scale.set(1, 1.5, 1); a.position.set(x, 0.78, 0.02); g.add(a); arms.push(a);
+    part(gCardTop, LANYARD, 0, 0.135, 0, badge);
+    part(gPhoto, 0xffd9a8, -0.075, -0.03, 0, badge);
+    part(gLine, 0x8a94a3, 0.07, 0.0, 0, badge); part(gLine, 0xb7bfca, 0.07, -0.05, 0, badge);
+    part(gLine, 0xb7bfca, 0, -0.135, 0, badge).scale.x = 2.4;
+    badge.position.set(0, 0.48, 0.39); badge.rotation.x = -0.1; g.add(badge); detail.push(badge);
+    // 팔: 어깨에서 내려오는 소매 + 셔츠 소맷부리 + 손
+    var arms = [], sleeves = [];
+    [-1, 1].forEach(function (sd) {
+      var a = new THREE.Group(); a.position.set(sd * 0.38, 0.85, 0.0);
+      var sl = part(gSleeve, 0x2c3e66, 0, -0.15, 0, a); sl.scale.set(1, 1.75, 1); sleeves.push(sl);
+      part(gCuff, SHIRT, 0, -0.33, 0, a);
+      part(gHand, FACE, 0, -0.39, 0, a);
+      a.rotation.z = sd * 0.2; a.userData.sd = sd;
+      g.add(a); arms.push(a);
     });
-    var sh = new THREE.Mesh(gShadow, shadowMat);
-    sh.rotation.x = -Math.PI / 2; sh.position.y = 0.03; g.add(sh);
+    // 다리: 엉덩이에서 내려오는 바지 + 구두. 걸을 때는 엉덩이를 축으로 흔든다
+    var legs = [], pants = [];
+    [-1, 1].forEach(function (sd) {
+      var l = new THREE.Group(); l.position.set(sd * 0.15, 0.4, 0);
+      pants.push(part(gLeg, 0x3d4049, 0, -0.14, 0, l));
+      var sh = part(gShoe, SHOE, 0, -0.31, 0.05, l); sh.scale.set(0.85, 0.6, 1.3);
+      g.add(l); legs.push(l);
+    });
+    var shd = new THREE.Mesh(gShadow, shadowMat);
+    shd.rotation.x = -Math.PI / 2; shd.position.y = 0.03; g.add(shd);
     var umb = new THREE.Group();
     var top = new THREE.Mesh(gUmbTop, umbMats[(umbIndex || 0) % umbMats.length]);
-    top.position.set(0.4, 2.62, 0.05); umb.add(top);
+    top.position.set(0.47, 2.85, 0.2); umb.add(top);
     var pole = new THREE.Mesh(gUmbPole, mat(0x4a4f57));
-    pole.position.set(0.4, 1.85, 0.05); umb.add(pole);
+    pole.position.set(0.47, 1.95, 0.2); umb.add(pole);
     umb.visible = false; g.add(umb);
-    g.userData.feet = feet; g.userData.arms = arms; g.userData.shadow = sh; g.userData.umb = umb;
+    g.userData.legs = legs; g.userData.arms = arms; g.userData.shadow = shd; g.userData.umb = umb;
     g.userData.skin = wool; g.userData.hat = null;
+    g.userData.suit = { jacket: [torso].concat(sleeves), lapel: [lapL, lapR], pants: pants, tie: [tie, knot] };
     g.userData.detail = detail; g.userData.far = false;
-    g.traverse(function (o) { if (o.isMesh && o !== sh) o.castShadow = true; });
+    g.traverse(function (o) { if (o.isMesh && o !== shd) o.castShadow = true; });
     setTag(g, tagText);
     return g;
   }
-  // 치장: 몸 색과 모자. 산 것이 없으면 번호에 따라 정해지는 기본 색을 쓴다.
+  // 치장: 털 색, 모자, 정장(자켓·바지·넥타이). 산 것이 없으면 기본값을 쓴다.
   var crownMat = new THREE.MeshLambertMaterial({ color: new THREE.Color(0xf0c419).convertSRGBToLinear(), side: THREE.DoubleSide });
+  // 모자는 예전 머리 크기에 맞춰 만든 뒤, 커진 머리에 맞게 통째로 키워 얹는다
+  var HAT_S = HOOD.r / 0.42;
   function buildHat(key) {
     var g = new THREE.Group(), m;
     function add(geo, color, x, y, z) { m = new THREE.Mesh(geo, mat(color)); m.position.set(x, y, z); g.add(m); return m; }
@@ -327,35 +401,55 @@ function bonsaBoot() {
       for (var i = 0; i < 6; i++) add(new THREE.ConeGeometry(0.07, 0.16, 6), 0xf0c419, Math.cos(i * Math.PI / 3) * 0.25, 2.02, Math.sin(i * Math.PI / 3) * 0.25);
       add(new THREE.SphereGeometry(0.05, 8, 6), 0xd9483b, 0, 1.88, 0.27);
     } else return null;
+    g.scale.setScalar(HAT_S);
+    g.position.set(0, HOOD.y - 1.47 * HAT_S - 0.05, HOOD.z + 0.08 * HAT_S);
+    g.traverse(function (o) { if (o.isMesh) o.castShadow = true; });
     return g;
   }
-  function applyLook(g, id, c, h) {
-    var u = g.userData, item = Object.prototype.hasOwnProperty.call(W.COSM, c) ? W.COSM[c] : null;
-    var skin = mat(item && item.slot === 'color' ? item.hex : BODY_COLORS[id % BODY_COLORS.length]), i;
+  function cosmHex(key, slot, fallback) {
+    var it = key && Object.prototype.hasOwnProperty.call(W.COSM, key) ? W.COSM[key] : null;
+    return it && it.slot === slot ? it.hex : W.COSM[fallback].hex;
+  }
+  // L: { c: 털 색, h: 모자, j: 자켓, pa: 바지, ti: 넥타이 } (빈 값이면 기본)
+  function applyLook(g, id, L) {
+    L = L || {};
+    var u = g.userData, item = L.c && Object.prototype.hasOwnProperty.call(W.COSM, L.c) ? W.COSM[L.c] : null;
+    var skin = mat(item && item.slot === 'color' ? item.hex : BODY_COLORS[id % BODY_COLORS.length]), i, h = L.h || '';
     for (i = 0; i < u.skin.length; i++) u.skin[i].material = skin;
+    var jx = cosmHex(L.j, 'jacket', W.SUIT_DEF.jacket), jm = mat(jx), lm = mat(shade(jx, 0.8));
+    var pm = mat(cosmHex(L.pa, 'pants', W.SUIT_DEF.pants)), tm = mat(cosmHex(L.ti, 'tie', W.SUIT_DEF.tie));
+    u.suit.jacket.forEach(function (m) { m.material = jm; });
+    u.suit.lapel.forEach(function (m) { m.material = lm; });
+    u.suit.pants.forEach(function (m) { m.material = pm; });
+    u.suit.tie.forEach(function (m) { m.material = tm; });
     if (u.hatKey === h) return;
     if (u.hat) { g.remove(u.hat); for (i = 0; i < u.hat.children.length; i++) u.hat.children[i].geometry.dispose(); }
-    u.hat = Object.prototype.hasOwnProperty.call(W.COSM, h) ? buildHat(h) : null; u.hatKey = h;
+    u.hat = h && Object.prototype.hasOwnProperty.call(W.COSM, h) ? buildHat(h) : null; u.hatKey = h;
+    u.hatLift = !u.hat ? 0 : (h === 'h_santa' || h === 'h_party') ? 0.4 : h === 'h_crown' ? 0.15 : 0.05;   // 모자 높이만큼 이름표를 올린다
     if (u.hat) g.add(u.hat);
   }
-  // 거리별 표현(LOD): 멀리 있는 캐릭터는 눈, 입, 사원증 같은 작은 부품을 숨긴다. 한 명당 그리는 조각이 3분의 1로 준다.
+  function lookOf(o) { return { c: o.c || '', h: o.h || '', j: o.j || '', pa: o.pa || '', ti: o.ti || '' }; }
+  // 거리별 표현(LOD): 멀리 있는 캐릭터는 눈, 입, 사원증 같은 작은 부품을 숨긴다.
   function setFar(g, far) {
     var u = g.userData;
     if (u.far === far) return;
     u.far = far;
     for (var i = 0; i < u.detail.length; i++) u.detail[i].visible = !far;
   }
-  // 걷는 동작과 우산 든 자세
+  // 걷는 동작, 우산 든 자세, 앉은 자세
   function pose(g, moving, walk, umbOn, sitting) {
     var u = g.userData, s = moving ? Math.sin(walk) : 0;
-    u.feet[0].position.z = sitting ? 0.34 : 0.05 + s * 0.16; u.feet[1].position.z = sitting ? 0.34 : 0.05 - s * 0.16;
-    u.feet[0].position.y = u.feet[1].position.y = sitting ? 0.2 : 0.1;
-    u.arms[0].position.z = 0.02 - s * 0.15;
-    if (umbOn) u.arms[1].position.set(0.44, 1.12, 0.14); else u.arms[1].position.set(0.52, 0.78, 0.02 + s * 0.15);
+    if (sitting) { u.legs[0].rotation.x = u.legs[1].rotation.x = -1.35; }
+    else { u.legs[0].rotation.x = s * 0.6; u.legs[1].rotation.x = -s * 0.6; }
+    u.arms[0].rotation.x = sitting ? -0.35 : -s * 0.55;
+    if (umbOn) { u.arms[1].rotation.x = -2.5; u.arms[1].rotation.z = 0.05; }
+    else { u.arms[1].rotation.x = sitting ? -0.35 : s * 0.55; u.arms[1].rotation.z = 0.2; }
     u.umb.visible = umbOn;
     u.shadow.position.y = 0.03 - g.position.y; u.shadow.visible = !sitting && !shadowsOn;
-    if (u.tag) u.tag.position.y = umbOn ? 3.05 : 2.25;
-    if (u.bubble) u.bubble.position.y = umbOn ? 3.7 : 2.9;
+    var lift = umbOn ? 0 : (u.hatLift || 0), up = (u.repTag ? 0.4 : 0) + lift;
+    if (u.tag) u.tag.position.y = (umbOn ? TAG_Y_UMB : TAG_Y) + lift;
+    if (u.repTag) u.repTag.position.y = (umbOn ? TAG_Y_UMB : TAG_Y) + lift + 0.4;
+    if (u.bubble) u.bubble.position.y = (umbOn ? BUBBLE_Y_UMB : BUBBLE_Y) + up;
   }
   function tagOf(rank, name) { return '[' + (RANKS[rank] || rank) + '] ' + name; }
 
@@ -772,7 +866,7 @@ function bonsaBoot() {
       var c = makeCharacter(n[0], '[안내] ' + n[1]);
       c.position.set(pos[0], 0, pos[1]); c.userData.dyn = true; lobby.add(c);
       var bubble = labelSprite(NPC_GREETING, 0.5, { bg: '#ffffff', color: '#1c2430', fs: 44, radius: 26 });
-      bubble.position.y = 2.95; bubble.visible = false; c.add(bubble);
+      bubble.position.y = 3.2; bubble.visible = false; c.add(bubble);
       npcs.push({ g: c, bubble: bubble, name: '안내 ' + n[1], x: pos[0], z: pos[1], t: i * 2 });
     });
 
@@ -1322,6 +1416,7 @@ function bonsaBoot() {
     if (xmasOn === !!on && env.themeSet) return;
     env.themeSet = true; xmasOn = !!on;
     env.xmasParts.forEach(function (o) { o.visible = xmasOn; });
+    npcs.forEach(function (n) { n.g.userData.hatLift = xmasOn ? 0.4 : 0; });      // 산타 모자 높이만큼 이름표를 올린다
     env.view.pano.material.map = xmasOn ? env.view.snowTex : env.view.dayTex; env.view.pano.material.needsUpdate = true;
   }
   function curCols() {
@@ -1454,7 +1549,8 @@ function bonsaBoot() {
   function addOther(p) {
     if (others[p.id]) removeOther(p.id);
     var g = makeCharacter(BODY_COLORS[p.id % BODY_COLORS.length], tagOf(p.r, p.n), p.id);
-    applyLook(g, p.id, p.c, p.h);
+    setTag(g, tagOf(p.r, p.n), repFloorOf(p.id));
+    applyLook(g, p.id, lookOf(p));
     g.position.set(p.x, 0, p.z); g.rotation.y = p.f;
     scene.add(g);
     others[p.id] = { g: g, x: p.x, z: p.z, f: p.f, walk: 0, umb: !!p.u, n: p.n, r: p.r, sit: !!p.s };
@@ -1462,7 +1558,7 @@ function bonsaBoot() {
   function removeOther(id) {
     var o = others[id];
     if (!o) return;
-    dropSprite(o.g.userData.tag); dropSprite(o.g.userData.bubble);
+    dropSprite(o.g.userData.tag); dropSprite(o.g.userData.repTag); dropSprite(o.g.userData.bubble);
     scene.remove(o.g);
     delete others[id];
   }
@@ -1660,7 +1756,7 @@ function bonsaBoot() {
     resize();
   }
   function renderMenu() {
-    $('mnWho').textContent = tagOf(me.r, me.n || '') + (me.floor ? ' · ' + floorLabel(me.floor) + ' 등록' : ' · 등록한 층 없음') + ' · ' + moneyText();
+    $('mnWho').textContent = tagOf(me.r, me.n || '') + (me.floor ? ' · ' + floorLabel(me.floor) + ' 등록' + (repFloorOf(myId) ? ' (★ 대표자)' : '') : ' · 등록한 층 없음') + ' · ' + moneyText();
     $('mnBoardF').style.display = me.floor ? '' : 'none';
     $('mnBoardF').firstChild.nodeValue = me.floor ? floorLabel(me.floor) + ' 게시판' : '내 층 게시판';
     $('mnDeco').style.display = typeof canDeco === 'function' && canDeco() ? '' : 'none';
@@ -1728,12 +1824,25 @@ function bonsaBoot() {
   /* ---------- 엘리베이터와 층 안내판 ---------- */
   function setFloors(list) {
     if (!Array.isArray(list)) return;
-    list.forEach(function (f) { floors[f[0]] = { name: String(f[1] || ''), c: Number(f[2]) || 0, lock: !!f[3] }; });
+    list.forEach(function (f) { floors[f[0]] = { name: String(f[1] || ''), c: Number(f[2]) || 0, lock: !!f[3], rep: Number(f[4]) || 0, repName: String(f[5] || '') }; });
+    refreshRepTags();
     refreshPlace();
     if ($('elev').style.display === 'flex') renderElev();
     if ($('finfo').style.display === 'flex') renderFinfo();
   }
   function isTop() { return me.r === 'owner' || me.r === 'ceo'; }
+  // 층 대표자: 그 사람이 대표인 층 번호 (없으면 0)
+  function repFloorOf(id) {
+    for (var n = W.FLOOR_MIN; n <= W.FLOOR_REG_MAX; n++) if (floors[n] && floors[n].rep === id) return n;
+    return 0;
+  }
+  function refreshRepTags() {
+    if (myId && (player.userData.rep || 0) !== repFloorOf(myId) && me.n) setTag(player, tagOf(me.r, me.n), repFloorOf(myId));
+    for (var id in others) {
+      var o = others[id], rf = repFloorOf(Number(id));
+      if ((o.g.userData.rep || 0) !== rf) setTag(o.g, tagOf(o.r, o.n), rf);
+    }
+  }
   function renderElev() {
     var box0 = $('floorList'), here = W.floorOf(area), n, b, sp;
     while (box0.firstChild) box0.removeChild(box0.firstChild);
@@ -1780,14 +1889,50 @@ function bonsaBoot() {
       reg.style.display = '';
       reg.textContent = me.floor === n ? '이 층 등록 해제' : me.floor ? me.floor + '층 등록 해제' : '이 층에 등록';
       reg.className = me.floor ? 'btn ghost' : 'btn';
-      canName = isTop() || me.r === 'manager' || (me.r === 'lead' && me.floor === n);
+      canName = isTop() || me.r === 'manager' || (me.floor === n && (me.r === 'lead' || f.rep === myId));
     }
+    renderRep(n, f);
     $('fiNameRow').style.display = canName ? 'block' : 'none';
     $('fiPassRow').style.display = n === 12 && isTop() ? 'block' : 'none';
     $('fiPassNote').textContent = f.lock ? '지금 비밀번호가 걸려 있습니다.' : '지금은 누구나 들어올 수 있습니다.';
     $('fiPassOff').style.display = f.lock ? '' : 'none';
   }
-  function openFinfo() { uiOpen = true; $('fiName').value = (floors[W.floorOf(area)] || {}).name || ''; $('fiPass').value = ''; renderFinfo(); $('finfo').style.display = 'flex'; }
+  // 층 대표자 칸: 부장 이상은 등록자 중에서 정하거나 비우고, 지금 대표자는 물려주거나 내려놓는다
+  var repMembers = { floor: 0, list: [] };
+  function canPickRep(n, f) { return n >= W.FLOOR_MIN && n <= W.FLOOR_REG_MAX && (level(me.r) >= level('manager') || f.rep === myId); }
+  function renderRep(n, f) {
+    var row = $('fiRepRow');
+    if (n < W.FLOOR_MIN || n > W.FLOOR_REG_MAX) { row.style.display = 'none'; return; }
+    row.style.display = '';
+    var boss = level(me.r) >= level('manager'), mine = f.rep && f.rep === myId;
+    $('fiRepNote').textContent = (f.rep ? '대표자: ' + f.repName + (mine ? ' (나).' : '.') : '아직 대표자가 없습니다.')
+      + ' 층마다 한 명이고, 이 층 등록자 중에서 부장 이상이 정합니다. 대표자는 층 이름을 바꾸고 층 게시판의 고정을 풀 수 있습니다.';
+    var pick = canPickRep(n, f), sel = $('fiRepSel');
+    $('fiRepPick').style.display = pick ? 'flex' : 'none';
+    $('fiRepQuitRow').style.display = mine || (boss && f.rep) ? 'flex' : 'none';
+    $('fiRepQuit').textContent = mine ? '대표 내려놓기' : '대표자 비우기';
+    $('fiRepSet').textContent = boss ? '대표로 정하기' : '대표 물려주기';
+    if (!pick) return;
+    clear(sel);
+    var list = repMembers.floor === n ? repMembers.list : [], added = 0;
+    list.forEach(function (u) {
+      if (u[0] === f.rep) return;                                    // 지금 대표자는 목록에서 뺀다
+      var o = document.createElement('option'); o.value = String(u[0]);
+      o.textContent = tagOf(u[2], u[1]) + (u[3] ? ' · 접속 중' : ''); sel.appendChild(o); added++;
+    });
+    if (!added) {
+      var o0 = document.createElement('option'); o0.value = ''; o0.textContent = repMembers.floor === n ? '고를 수 있는 등록자가 없습니다' : '불러오는 중…';
+      sel.appendChild(o0);
+    }
+    $('fiRepSet').disabled = !added;
+  }
+  $('fiRepSet').addEventListener('click', function () { var v = Number($('fiRepSel').value); if (v) sendMsg({ t: 'frep', id: v }); });
+  $('fiRepQuit').addEventListener('click', function () { sendMsg({ t: 'frep', id: 0 }); });
+  function openFinfo() {
+    var n0 = W.floorOf(area);
+    repMembers = { floor: 0, list: [] };
+    if (canPickRep(n0, floors[n0] || {})) sendMsg({ t: 'fmembers' });
+    uiOpen = true; $('fiName').value = (floors[W.floorOf(area)] || {}).name || ''; $('fiPass').value = ''; renderFinfo(); $('finfo').style.display = 'flex'; }
   function closeFinfo() { if ($('finfo').style.display !== 'flex') return; $('finfo').style.display = 'none'; $('fiPass').value = ''; uiOpen = false; }
   $('fiReg').addEventListener('click', function () { sendMsg({ t: 'freg', on: !me.floor }); });
   $('fiNameRow').addEventListener('submit', function (e) { e.preventDefault(); sendMsg({ t: 'fname', name: $('fiName').value }); });
@@ -1945,45 +2090,94 @@ function bonsaBoot() {
   /* ---------- 상점과 치장 (값과 보유 여부는 서버가 판정한다) ---------- */
   function moneyText() { return '내 돈 ' + (me.money || 0) + '코인'; }
   function shopOpen() { return $('shop').style.display === 'flex'; }
-  var buyArmed = '';
+  // 탭: 털 색, 모자, 자켓, 바지, 넥타이. 하나를 누르면 내 캐릭터에 먼저 입혀 보고, 아래 버튼으로 사거나 입는다.
+  var SHOP_TABS = [['jacket', '자켓'], ['pants', '바지'], ['tie', '넥타이'], ['color', '털 색'], ['hat', '모자']];
+  var LOOK_KEY = { color: 'c', hat: 'h', jacket: 'j', pants: 'pa', tie: 'ti' };
+  var shop = { tab: 'jacket', sel: null, data: null };
+  function hexCss(hex) { return '#' + ('000000' + hex.toString(16)).slice(-6); }
+  function wornKey(slot) {                                   // 지금 입고 있는 것 (기본 옷이면 그 기본 키)
+    var k = (shop.data && shop.data[LOOK_KEY[slot]]) || '';
+    return k || (W.SUIT_DEF[slot] || '');
+  }
+  function owns(k) { return !k || (W.COSM[k] && W.COSM[k].def) || (shop.data && shop.data.own.indexOf(k) >= 0); }
+  function shopPreview() {                                   // 고른 것을 내 캐릭터에만 미리 입혀 본다
+    var L = lookOf(me);
+    if (shop.sel !== null) L[LOOK_KEY[shop.tab]] = shop.sel;
+    applyLook(player, myId, L);
+  }
   function renderShop(m) {
-    if (!shopOpen() || !Array.isArray(m.own)) return;
-    me.money = Number(m.money) || 0; buyArmed = '';
+    if (m) {
+      if (!shopOpen() || !Array.isArray(m.own)) return;
+      shop.data = m; me.money = Number(m.money) || 0;
+    }
+    if (!shop.data) return;
     $('shNote').textContent = moneyText();
-    ['color', 'hat'].forEach(function (slot) {
-      var box0 = $(slot === 'color' ? 'shColors' : 'shHats'), worn = slot === 'color' ? m.c : m.h;
-      clear(box0);
-      function row(key, name, hex, right, cls) {
-        var b = document.createElement('button'), sp = document.createElement('span'), dot;
-        b.type = 'button'; b.setAttribute('data-item', key); b.setAttribute('data-slot', slot);
-        if (hex !== null) { dot = document.createElement('i'); dot.style.background = '#' + ('000000' + hex.toString(16)).slice(-6); b.appendChild(dot); }
-        b.appendChild(document.createTextNode(name)); sp.textContent = right; b.appendChild(sp);
-        if (cls) b.className = cls;
-        box0.appendChild(b);
-      }
-      row('', slot === 'color' ? '기본 털 색' : '모자 없음', null, worn ? '바꾸기' : '착용 중', worn ? '' : 'here');
-      Object.keys(W.COSM).forEach(function (k) {
-        var it = W.COSM[k];
-        if (it.slot !== slot) return;
-        var own = m.own.indexOf(k) >= 0;
-        row(k, it.n, slot === 'color' ? it.hex : null, worn === k ? '착용 중' : own ? '보유 · 착용하기' : (it.price ? it.price + '코인' : '무료'), worn === k ? 'here' : own ? 'mine' : '');
-        if (own) box0.lastChild.setAttribute('data-own', '1');
-      });
+    var tabs = $('shTabs'), grid = $('shGrid'), slot = shop.tab, worn = wornKey(slot);
+    clear(tabs);
+    SHOP_TABS.forEach(function (t) {
+      var b = document.createElement('button'); b.type = 'button'; b.textContent = t[1]; b.setAttribute('data-tab', t[0]);
+      if (t[0] === slot) b.className = 'on';
+      tabs.appendChild(b);
     });
+    clear(grid);
+    function cell(key, name, hex, status, cls) {
+      var b = document.createElement('button'), dot = document.createElement('i'), nb = document.createElement('b'), st = document.createElement('small');
+      b.type = 'button'; b.setAttribute('data-item', key);
+      if (hex === null) dot.className = 'none'; else dot.style.background = hexCss(hex);
+      nb.textContent = name; st.textContent = status;
+      b.appendChild(dot); b.appendChild(nb); b.appendChild(st);
+      b.className = cls + ((shop.sel === null ? worn : shop.sel) === key ? ' sel' : '');
+      grid.appendChild(b);
+    }
+    if (slot === 'color' || slot === 'hat') cell('', slot === 'color' ? '기본 털 색' : '모자 없음', slot === 'color' ? BODY_COLORS[myId % BODY_COLORS.length] : null, worn === '' ? '착용 중' : '기본', worn === '' ? 'here' : 'mine');
+    Object.keys(W.COSM).forEach(function (k) {
+      var it = W.COSM[k];
+      if (it.slot !== slot) return;
+      var own = owns(k), name = it.n.replace(/ (자켓|바지|넥타이)$/, '');
+      var hex = it.hex !== undefined ? it.hex : (k === 'h_santa' ? 0xd62f2f : k === 'h_crown' ? 0xf0c419 : k === 'h_cap' ? 0xd9483b : k === 'h_beanie' ? 0x3f6fb5 : k === 'h_party' ? 0xf2b441 : 0xf06292);
+      cell(k, name, hex, worn === k ? '착용 중' : it.def ? '기본' : own ? '보유' : (it.price ? it.price + '코인' : '무료'), worn === k ? 'here' : own ? 'mine' : '');
+    });
+    // 아래 막대: 고른 것의 이름과 할 일
+    var key = shop.sel === null ? worn : shop.sel, act = $('shAct'), it0 = key ? W.COSM[key] : null;
+    var nm = it0 ? it0.n : (slot === 'color' ? '기본 털 색' : '모자 없음');
+    act.disabled = false;
+    if (key === worn) { $('shSel').textContent = nm + ' · 착용 중'; act.textContent = '착용 중'; act.disabled = true; act.setAttribute('data-do', ''); }
+    else if (owns(key)) { $('shSel').textContent = nm + (it0 && !it0.def ? ' · 보유' : ''); act.textContent = '입기'; act.setAttribute('data-do', 'equip'); }
+    else {
+      var price = it0.price || 0;
+      $('shSel').textContent = nm + ' · 입어 보는 중';
+      if ((me.money || 0) < price) { act.textContent = price + '코인 (코인 부족)'; act.disabled = true; act.setAttribute('data-do', ''); }
+      else { act.textContent = price ? price + '코인에 사기' : '무료로 받기'; act.setAttribute('data-do', 'buy'); }
+    }
+    shopPreview();
   }
-  function shopClick(e) {
+  $('shTabs').addEventListener('click', function (e) {
     var b = e.target.closest ? e.target.closest('button') : null;
-    if (!b || b.className === 'here') return;
-    var key = b.getAttribute('data-item');
-    if (!key || b.getAttribute('data-own')) { sendMsg({ t: 'equip', slot: b.getAttribute('data-slot'), item: key }); return; }
-    if (buyArmed !== key) { buyArmed = key; b.lastChild.textContent = '한 번 더 누르면 삽니다'; return; }   // 실수로 사지 않게 두 번 눌러야 한다
-    buyArmed = ''; sendMsg({ t: 'buy', item: key });
+    if (!b) return;
+    shop.tab = b.getAttribute('data-tab'); shop.sel = null; renderShop();
+  });
+  $('shGrid').addEventListener('click', function (e) {
+    var b = e.target.closest ? e.target.closest('button') : null;
+    if (!b) return;
+    shop.sel = b.getAttribute('data-item'); renderShop();
+  });
+  $('shAct').addEventListener('click', function () {
+    var d = $('shAct').getAttribute('data-do'), key = shop.sel === null ? wornKey(shop.tab) : shop.sel;
+    if (d === 'buy') { sendMsg({ t: 'buy', item: key }); $('shAct').disabled = true; }
+    else if (d === 'equip') { sendMsg({ t: 'equip', slot: shop.tab, item: key }); $('shAct').disabled = true; }
+  });
+  function openShop() {
+    if (!playing || uiOpen) return;
+    uiOpen = true; shop.sel = null; shop.data = null;
+    $('shNote').textContent = '불러오는 중…'; clear($('shGrid')); clear($('shTabs')); $('shSel').textContent = ''; $('shAct').textContent = ''; $('shAct').disabled = true;
+    $('shop').style.display = 'flex'; sendMsg({ t: 'shop' });
   }
-  $('shColors').addEventListener('click', shopClick); $('shHats').addEventListener('click', shopClick);
-  function openShop() { if (!playing || uiOpen) return; uiOpen = true; $('shNote').textContent = '불러오는 중…'; $('shop').style.display = 'flex'; sendMsg({ t: 'shop' }); }
-  function closeShop() { if (!shopOpen()) return; $('shop').style.display = 'none'; uiOpen = false; }
+  function closeShop() {
+    if (!shopOpen()) return;
+    $('shop').style.display = 'none'; uiOpen = false; shop.sel = null;
+    applyLook(player, myId, lookOf(me));                       // 입어 보던 것을 벗고 실제로 입은 옷으로
+  }
   $('shClose').addEventListener('click', closeShop);
-  $('shop').addEventListener('click', function (e) { if (e.target === $('shop')) closeShop(); });
 
   /* ---------- 이벤트: 사장·부장이 만들고, 누구나 참가 신청하고, 부팀장 이상이 성공 판정을 하면 서버가 보상을 준다 ---------- */
   function eventsOpen() { return $('events').style.display === 'flex'; }
@@ -2048,7 +2242,7 @@ function bonsaBoot() {
   function renderProf() {
     if (!prof) return;
     $('pfName').textContent = tagOf(prof.r, prof.n);
-    $('pfNote').textContent = '직급: ' + (RANKS[prof.r] || prof.r) + ' · 등록 층: ' + (prof.floor ? floorLabel(prof.floor) : '없음') + ' · ' + (prof.on ? '접속 중' : '접속 안 함');
+    $('pfNote').textContent = '직급: ' + (RANKS[prof.r] || prof.r) + ' · 등록 층: ' + (prof.floor ? floorLabel(prof.floor) : '없음') + (repFloorOf(prof.id) ? ' (★ 대표자)' : '') + ' · ' + (prof.on ? '접속 중' : '접속 안 함');
     var box0 = $('pfRanks'), a = level(me.r), t = level(prof.r), any = false;
     clear(box0);
     if (a >= level('lead') && prof.id !== myId && prof.r !== 'owner' && t < a) {
@@ -2088,7 +2282,7 @@ function bonsaBoot() {
       var b = document.createElement('button'), sp = document.createElement('span');
       b.type = 'button'; b.setAttribute('data-id', u[0]);
       b.appendChild(document.createTextNode(tagOf(u[2], u[1])));
-      sp.textContent = (u[3] ? u[3] + '층' : '미등록') + (u[4] ? ' · 접속 중' : '');
+      sp.textContent = (u[3] ? u[3] + '층' + (repFloorOf(u[0]) === u[3] ? ' ★대표' : '') : '미등록') + (u[4] ? ' · 접속 중' : '');
       if (u[4]) on++;
       b.appendChild(sp); box0.appendChild(b);
     });
@@ -2288,10 +2482,11 @@ function bonsaBoot() {
       case 'hello':
         myId = m.id; retry = 0;
         me.money = Number(m.me.money) || 0; me.c = m.me.c || ''; me.h = m.me.h || '';
-        applyLook(player, myId, me.c, me.h);
-        setTag(player, tagOf(m.me.r, m.me.n));
+        me.j = m.me.j || ''; me.pa = m.me.pa || ''; me.ti = m.me.ti || '';
+        applyLook(player, myId, lookOf(me));
         me.r = m.me.r; me.n = m.me.n; me.floor = m.me.floor || null;
         if (m.floors) setFloors(m.floors);
+        setTag(player, tagOf(m.me.r, m.me.n), repFloorOf(myId));
         applyCfg(m.cfg, true);
         player.userData.umb.children[0].material = umbMats[myId % umbMats.length];
         if (typeof m.now === 'number') clockOffset = m.now - Date.now();
@@ -2326,13 +2521,16 @@ function bonsaBoot() {
         break;
       case 'area': switchArea(m.area, m.x, m.z, m.players, m.f, m.pins, m.furn); break;
       case 'floors': setFloors(m.floors); break;
+      case 'fmembers':
+        if (Array.isArray(m.list)) { repMembers = { floor: Number(m.floor) || 0, list: m.list }; if ($('finfo').style.display === 'flex') renderFinfo(); }
+        break;
       case 'me': me.floor = m.floor || null; if ($('finfo').style.display === 'flex') renderFinfo(); if ($('elev').style.display === 'flex') renderElev(); break;
       case 'needpw': $('pwRow').style.display = 'block'; $('pwIn').value = ''; $('pwIn').focus(); break;
       case 'toast': toast(m.m); break;
       case 'rank':
         if (!RANKS[m.r]) break;
-        if (m.id === myId) { me.r = m.r; setTag(player, tagOf(me.r, me.n)); }
-        else if (others[m.id]) { others[m.id].r = m.r; setTag(others[m.id].g, tagOf(m.r, others[m.id].n)); }
+        if (m.id === myId) { me.r = m.r; setTag(player, tagOf(me.r, me.n), repFloorOf(myId)); }
+        else if (others[m.id]) { others[m.id].r = m.r; setTag(others[m.id].g, tagOf(m.r, others[m.id].n), repFloorOf(m.id)); }
         if ($('finfo').style.display === 'flex') renderFinfo();
         if ($('prof').style.display === 'flex') renderProf();
         break;
@@ -2342,10 +2540,10 @@ function bonsaBoot() {
       case 'bnew': if (boardOpen() && m.b === curBoard && !editId) sendMsg({ t: 'posts', b: curBoard }); break;
       case 'pins': if (m.b === W.floorOf(area)) setPapers(m.list); break;
       case 'furn': onFurn(m); break;
-      case 'money': me.money = Number(m.v) || 0; if (deco.on) renderDeco(); if (menuOpen()) renderMenu(); if (shopOpen()) $('shNote').textContent = moneyText(); break;
+      case 'money': me.money = Number(m.v) || 0; if (deco.on) renderDeco(); if (menuOpen()) renderMenu(); if (shopOpen()) renderShop(); break;
       case 'look':
-        if (m.id === myId) { me.c = m.c || ''; me.h = m.h || ''; applyLook(player, myId, me.c, me.h); }
-        else if (others[m.id]) applyLook(others[m.id].g, m.id, m.c || '', m.h || '');
+        if (m.id === myId) { me.c = m.c || ''; me.h = m.h || ''; me.j = m.j || ''; me.pa = m.pa || ''; me.ti = m.ti || ''; if (!shopOpen()) applyLook(player, myId, lookOf(me)); }
+        else if (others[m.id]) applyLook(others[m.id].g, m.id, lookOf(m));
         break;
       case 'shop': renderShop(m); break;
       case 'cfg': applyCfg(m.cfg, false); break;
@@ -2676,8 +2874,8 @@ function bonsaBoot() {
       P.face = turn(P.face, Math.atan2(vx, vz), Math.min(1, dt * 12));
       P.walk += dt * 11 * mag;
     }
-    player.position.set(P.x, mySit ? 0.3 : (moving ? Math.abs(Math.sin(P.walk)) * 0.09 : 0), P.z);
-    player.rotation.y = P.face;
+    player.position.set(P.x, mySit ? SIT_Y : (moving ? Math.abs(Math.sin(P.walk)) * 0.09 : 0), P.z);
+    player.rotation.y = shopOpen() ? cam.yaw : P.face;   // 상점에서는 카메라 쪽으로 돌아서서 앞모습을 보여 준다
     var umbShow = area === 'out' && E.wet > 0.02;       // 우산은 야외에서 비나 눈이 올 때만 보인다
     pose(player, moving, P.walk, myUmb && umbShow, mySit);
     expireBubble(player, now);
@@ -2711,7 +2909,7 @@ function bonsaBoot() {
         o.g.position.x += ddx * Math.min(1, dt * 10); o.g.position.z += ddz * Math.min(1, dt * 10);
         o.walk += dt * 11;
       }
-      o.g.position.y = o.sit ? 0.3 : (dd > 0.05 ? Math.abs(Math.sin(o.walk)) * 0.09 : 0);
+      o.g.position.y = o.sit ? SIT_Y : (dd > 0.05 ? Math.abs(Math.sin(o.walk)) * 0.09 : 0);
       pose(o.g, dd > 0.05 && !o.sit, o.walk, o.umb && umbShow, o.sit);
       setFar(o.g, (o.g.position.x - P.x) * (o.g.position.x - P.x) + (o.g.position.z - P.z) * (o.g.position.z - P.z) > (quality === 'low' ? 100 : 256));
       o.g.rotation.y = turn(o.g.rotation.y, o.f, Math.min(1, dt * 12));
@@ -2763,10 +2961,10 @@ function bonsaBoot() {
       return;
     }
     // 3인칭 카메라
-    var dist = area !== 'out' ? 5.6 : 8;
-    var h = Math.cos(cam.pitch) * dist;
+    var inShop = shopOpen(), dist = inShop ? 5.2 : area !== 'out' ? 5.6 : 8, pitch = inShop ? 0.1 : cam.pitch;
+    var h = Math.cos(pitch) * dist;
     var cx = P.x + Math.sin(cam.yaw) * h, cz = P.z + Math.cos(cam.yaw) * h;
-    var cyy = 1.3 + Math.sin(cam.pitch) * dist;
+    var cyy = 1.3 + Math.sin(pitch) * dist;
     if (area !== 'out') {
       cx = Math.max(-LW / 2 + 0.4, Math.min(LW / 2 - 0.4, cx));
       cz = Math.max(-LD / 2 + 0.4, Math.min(LD / 2 - 0.4, cz));
@@ -2778,7 +2976,9 @@ function bonsaBoot() {
       if (mn === pz1) cz = 6.6; else if (mn === pz0) cz = -6.6; else if (mn === px1) cx = 8.6; else cx = -8.6;
     }
     camera.position.set(cx, cyy, cz);
-    camera.lookAt(P.x, 1.3, P.z);
+    camera.lookAt(P.x, inShop ? -0.34 : 1.3, P.z);
+    if (player.userData.tag) player.userData.tag.visible = !inShop;
+    if (player.userData.repTag) player.userData.repTag.visible = !inShop;      // 상점: 캐릭터가 화면 위쪽(시트 위)에 오도록 아래를 본다
     envTick(dt, now / 1000, cx, cyy, cz);
 
     renderer.render(scene, camera);

@@ -155,11 +155,22 @@ const OPS = {
     if (!u) throw new Error('없는 사용자입니다.');
     if (u.username === config.superAdmin) throw new Error('총관리자는 정지할 수 없습니다.');
     await db.setBanned(id, on);
-    if (on) game.adminKick(id);
+    if (on) { game.adminKick(id); await game.dropRep(id, actor); }
     await db.audit(actor, 'admin_ban', u.nickname + '(' + id + ') ' + (on ? '정지' : '정지 해제') + ' / ' + text(b.reason, 100));
     return {};
   },
-  async floors(game) { return { list: game.floorList() }; },
+  async floors(game) {
+    const members = {};
+    for (let n = World.FLOOR_MIN; n <= World.FLOOR_REG_MAX; n++) members[n] = (await db.floorMembers(n)).map(u => [u.id, u.nickname]);
+    return { list: game.floorList(), members };
+  },
+  async 'floor.rep'(game, b, actor) {
+    const floor = int(b.floor), id = int(b.id) || 0;
+    if (!(floor >= World.FLOOR_MIN && floor <= World.FLOOR_REG_MAX)) throw new Error('2~11층만 대표자를 둘 수 있습니다.');
+    const r = await game.setRep(floor, id, actor);
+    if (r.error) throw new Error('그 층에 등록된 사원만 대표자가 될 수 있습니다.');
+    return {};
+  },
   async 'floor.name'(game, b, actor) {
     const floor = int(b.floor), name = text(b.name, 12).replace(/\s+/g, ' ');
     if (!(await game.adminFloorName(floor, name))) throw new Error('층 이름은 한글, 영문, 숫자로 12자까지입니다.');
@@ -197,9 +208,10 @@ const OPS = {
     return {};
   },
   async shop(game) {
+    const SLOT_KO = { color: '털 색', hat: '모자', jacket: '자켓', pants: '바지', tie: '넥타이' };
     const row = (k, it, kind) => [k, kind, it.n, it.price, game.basePrices[k]];
     return { list: Object.keys(World.FURN).map(k => row(k, World.FURN[k], '가구'))
-      .concat(Object.keys(World.COSM).map(k => row(k, World.COSM[k], World.COSM[k].slot === 'color' ? '털 색' : '모자'))) };
+      .concat(Object.keys(World.COSM).filter(k => !World.COSM[k].def).map(k => row(k, World.COSM[k], SLOT_KO[World.COSM[k].slot] || '치장'))) };
   },
   async 'shop.price'(game, b, actor) {
     const k = String(b.item), price = int(b.price);

@@ -105,9 +105,20 @@
           var name = el('input', { value: f[1], maxlength: '12', placeholder: f[0] === 12 ? '사장실' : '이름 없음' });
           var save = el('button', { cls: 'ghost', text: '이름 저장', on: function () { act('floor.name', { floor: f[0], name: name.value }).then(function () { say(f[0] + '층 이름을 저장했습니다.'); }); } });
           var lock = f[0] === 12 && f[3] ? twice(el('button', { cls: 'danger', text: '비밀번호 해제' }), '비밀번호 해제', function () { act('floor.unlock').then(function () { say('12층 비밀번호를 해제했습니다.'); go('floors'); }); }) : '';
-          return [f[0] + '층', name, f[0] === 12 ? '-' : f[2] + ' / 20', f[0] === 12 ? (f[3] ? '잠김' : '열림') : '', save, lock];
+          var repCell = '-';
+          if (f[0] !== 12) {                                   // 층 대표자: 그 층 등록자 중에서 한 명
+            var sel = el('select', {}, [el('option', { value: '0', text: '대표자 없음' })]);
+            ((r.members || {})[f[0]] || []).forEach(function (u) {
+              var o = el('option', { value: String(u[0]), text: u[1] }); if (u[0] === f[4]) o.selected = true; sel.appendChild(o);
+            });
+            var repSave = el('button', { cls: 'ghost', text: '대표 저장', on: function () {
+              act('floor.rep', { floor: f[0], id: Number(sel.value) }).then(function () { say(f[0] + '층 대표자를 저장했습니다.'); go('floors'); });
+            } });
+            repCell = el('div', {}, [sel, ' ', repSave]);
+          }
+          return [f[0] + '층', name, f[0] === 12 ? '-' : f[2] + ' / 20', repCell, f[0] === 12 ? (f[3] ? '잠김' : '열림') : '', save, lock];
         });
-        show([card('층', '층 이름은 한글, 영문, 숫자로 12자까지입니다.', [table(['층', '이름', '등록 인원', '12층 잠금', '', ''], rows)])]);
+        show([card('층', '층 이름은 한글, 영문, 숫자로 12자까지입니다. 2~11층은 층마다 대표자를 한 명 둘 수 있고, 그 층 등록자 중에서 고릅니다.', [table(['층', '이름', '등록 인원', '대표자', '12층 잠금', '', ''], rows)])]);
       });
     },
     posts: function () {
@@ -168,7 +179,7 @@
         var sel = el('select');
         [['', '전체'], ['rank', '직급 변경'], ['money', '코인 이동'], ['admin_login', '관리자 로그인'], ['admin_rank', '관리자: 직급'], ['admin_money', '관리자: 코인'],
           ['admin_ban', '관리자: 정지'], ['admin_backup', '관리자: 백업'], ['admin_post', '관리자: 게시판'], ['admin_shop', '관리자: 값'], ['admin_config', '관리자: 설정'], ['floor_name', '층 이름'],
-          ['floor12_pass', '12층 비밀번호'], ['event_new', '이벤트 생성'], ['event_close', '이벤트 종료']].forEach(function (o) {
+          ['floor12_pass', '12층 비밀번호'], ['floor_rep', '층 대표자'], ['event_new', '이벤트 생성'], ['event_close', '이벤트 종료']].forEach(function (o) {
           var x = el('option', { value: o[0], text: o[1] }); if (o[0] === (filter || '')) x.selected = true; sel.appendChild(x);
         });
         sel.addEventListener('change', function () { VIEWS.logs(sel.value); });

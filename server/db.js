@@ -100,7 +100,7 @@ function pgStore() {
         return { money: pay.rows[0].money };
       } catch (e) { try { await c.query('ROLLBACK'); } catch (e2) {} throw e; } finally { c.release(); }
     },
-    async setLook(uid, color, hat) { await pool.query('UPDATE users SET color = $2, hat = $3 WHERE id = $1', [uid, color, hat]); },
+    async setLook(uid, L) { await pool.query('UPDATE users SET color = $2, hat = $3, jacket = $4, pants = $5, tie = $6 WHERE id = $1', [uid, L.color, L.hat, L.jacket, L.pants, L.tie]); },
     // ---- 이벤트 ----
     async listEvents() {
       const r = await pool.query(
@@ -215,7 +215,9 @@ function pgStore() {
     },
     // 층 정보: 이름, 12층 비밀번호 해시, 층별 등록 인원
     async loadFloors() {
-      const f = await pool.query('SELECT floor, name, pass_hash FROM floors');
+      // 대표자는 그 층에 등록되어 있고 정지되지 않은 사람만 인정한다
+      const f = await pool.query('SELECT f.floor, f.name, f.pass_hash, u.id AS rep, u.nickname AS rep_name FROM floors f '
+        + 'LEFT JOIN users u ON u.id = f.rep AND u.floor = f.floor AND NOT u.banned');
       const c = await pool.query('SELECT floor, count(*)::int AS n FROM users WHERE floor IS NOT NULL GROUP BY floor');
       return { floors: f.rows, counts: c.rows };
     },
@@ -236,6 +238,28 @@ function pgStore() {
     },
     async unregisterFloor(uid) {
       await pool.query('UPDATE users SET floor = NULL WHERE id = $1', [uid]);
+      await pool.query('UPDATE floors SET rep = NULL WHERE rep = $1', [uid]);      // 층을 떠나면 대표자도 내려놓는다
+    },
+    // 층 대표자 지정(uid) 또는 해제(null). 지정할 사람은 그 층 등록자여야 한다. 층마다 잠금을 걸어 등록 해제와 엇갈리지 않게 한다.
+    async setFloorRep(floor, uid) {
+      const c = await pool.connect();
+      try {
+        await c.query('BEGIN');
+        await c.query('SELECT pg_advisory_xact_lock($1)', [7000 + floor]);
+        let name = null;
+        if (uid) {
+          const u = await c.query('SELECT nickname FROM users WHERE id = $1 AND floor = $2 AND NOT banned', [uid, floor]);
+          if (!u.rows.length) { await c.query('ROLLBACK'); return { error: 'notmember' }; }
+          name = u.rows[0].nickname;
+        }
+        await c.query('INSERT INTO floors (floor, rep) VALUES ($1, $2) ON CONFLICT (floor) DO UPDATE SET rep = $2', [floor, uid || null]);
+        await c.query('COMMIT');
+        return { ok: true, name };
+      } catch (e) { try { await c.query('ROLLBACK'); } catch (e2) {} throw e; } finally { c.release(); }
+    },
+    async floorMembers(floor) {
+      const r = await pool.query('SELECT id, username, nickname, rank FROM users WHERE floor = $1 AND NOT banned ORDER BY id LIMIT 50', [floor]);
+      return r.rows;
     },
     async setFloorName(floor, name) {
       await pool.query('INSERT INTO floors (floor, name) VALUES ($1, $2) ON CONFLICT (floor) DO UPDATE SET name = $2', [floor, name]);
@@ -254,7 +278,7 @@ function memoryStore() {
   let seq = 0, postSeq = 0, furnSeq = 0, eventSeq = 0;
   function row(floor) {
     let f = floors.find(x => x.floor === floor);
-    if (!f) { f = { floor, name: '', pass_hash: null }; floors.push(f); }
+    if (!f) { f = { floor, name: '', pass_hash: null, rep: null }; floors.push(f); }
     return f;
   }
   return {
@@ -264,7 +288,7 @@ function memoryStore() {
       if (users.length >= maxUsers) return { error: 'full' };
       if (users.some(u => u.username === username)) return { error: 'username' };
       if (users.some(u => u.nickname === nickname)) return { error: 'nickname' };
-      const u = { id: ++seq, username, nickname, pass_hash: passHash, rank: 'intern', money: 200, banned: false, floor: null, color: null, hat: null, items: [] };
+      const u = { id: ++seq, username, nickname, pass_hash: passHash, rank: 'intern', money: 200, banned: false, floor: null, color: null, hat: null, jacket: null, pants: null, tie: null, items: [] };
       users.push(u);
       return { id: u.id };
     },
@@ -301,7 +325,7 @@ function memoryStore() {
       u.money -= price; u.items.push(item); log.push({ actor: uid, action: 'money', detail: '구매 ' + item + ' -' + price });
       return { money: u.money };
     },
-    async setLook(uid, color, hat) { const u = users.find(x => x.id === uid); if (u) { u.color = color; u.hat = hat; } },
+    async setLook(uid, L) { const u = users.find(x => x.id === uid); if (u) { u.color = L.color; u.hat = L.hat; u.jacket = L.jacket; u.pants = L.pants; u.tie = L.tie; } },
     async listEvents() {
       return events.filter(e => !e.closed).slice(-20).reverse().map(e => ({ id: e.id, title: e.title, body: e.body, reward: e.reward, creator: e.creator, nickname: users.find(u => u.id === e.creator).nickname }));
     },
@@ -350,7 +374,10 @@ function memoryStore() {
     async loadFloors() {
       const counts = {};
       users.forEach(u => { if (u.floor) counts[u.floor] = (counts[u.floor] || 0) + 1; });
-      return { floors: floors.slice(), counts: Object.keys(counts).map(k => ({ floor: Number(k), n: counts[k] })) };
+      return { floors: floors.map(f => {
+        const u = users.find(x => x.id === f.rep && x.floor === f.floor && !x.banned);
+        return { floor: f.floor, name: f.name, pass_hash: f.pass_hash, rep: u ? u.id : null, rep_name: u ? u.nickname : null };
+      }), counts: Object.keys(counts).map(k => ({ floor: Number(k), n: counts[k] })) };
     },
     async registerFloor(uid, floor, cap) {
       const u = users.find(x => x.id === uid);
@@ -358,7 +385,13 @@ function memoryStore() {
       if (users.filter(x => x.floor === floor).length >= cap) return { error: 'full' };
       u.floor = floor; return { ok: true };
     },
-    async unregisterFloor(uid) { const u = users.find(x => x.id === uid); if (u) u.floor = null; },
+    async unregisterFloor(uid) { const u = users.find(x => x.id === uid); if (u) u.floor = null; floors.forEach(f => { if (f.rep === uid) f.rep = null; }); },
+    async setFloorRep(floor, uid) {
+      let name = null;
+      if (uid) { const u = users.find(x => x.id === uid && x.floor === floor && !x.banned); if (!u) return { error: 'notmember' }; name = u.nickname; }
+      row(floor).rep = uid || null; return { ok: true, name };
+    },
+    async floorMembers(floor) { return users.filter(u => u.floor === floor && !u.banned).slice(0, 50).map(u => ({ id: u.id, username: u.username, nickname: u.nickname, rank: u.rank })); },
     async setFloorName(floor, name) { row(floor).name = name; },
     async setFloorPass(floor, hash) { row(floor).pass_hash = hash; },
     async audit(actor, action, detail) { log.push({ at: Date.now(), actor, action, detail }); if (log.length > 500) log.shift(); }

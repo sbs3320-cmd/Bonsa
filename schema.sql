@@ -90,3 +90,9 @@ CREATE TABLE IF NOT EXISTS user_items (
 -- 가구를 놓을 때 낸 값. 치우면 이 값만큼 놓은 사람에게 돌려준다 (값을 받기 전에 놓인 가구는 0).
 ALTER TABLE furniture ADD COLUMN IF NOT EXISTS paid INTEGER NOT NULL DEFAULT 0;
 CREATE INDEX IF NOT EXISTS audit_log_id_idx ON audit_log (id DESC);
+
+-- 1.4.0: 정장 치장(자켓, 바지, 넥타이)과 층 대표자
+ALTER TABLE users ADD COLUMN IF NOT EXISTS jacket TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS pants TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS tie TEXT;
+ALTER TABLE floors ADD COLUMN IF NOT EXISTS rep INTEGER REFERENCES users(id);
