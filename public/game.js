@@ -176,6 +176,8 @@ function bonsaBoot() {
     s.scale.set(height * t.aspect, height, 1);
     return s;
   }
+  // 이름표·말풍선은 가로등이나 나무에 가려지지 않게 늘 맨 앞에 그린다
+  function onTop(sp) { sp.material.depthTest = false; sp.renderOrder = 20; return sp; }
   function dropSprite(s) {
     if (!s) return;
     if (s.parent) s.parent.remove(s);
@@ -186,6 +188,45 @@ function bonsaBoot() {
     return new THREE.Mesh(new THREE.PlaneGeometry(height * t.aspect, height),
       new THREE.MeshBasicMaterial({ map: t.tex, transparent: true }));
   }
+
+  /* ---------- 카메라 가림 막기 ---------- */
+  // 야외에서 내 캐릭터와 카메라 사이에 큰 물체(가게, 나무 잎, 가로등 머리, 크리스마스트리)가 끼면 카메라를 그 앞으로 당긴다.
+  // 물체는 상자(최소·최대 x, y, z)로 단순하게 잡는다. 판정은 상자 수십 개뿐이라 휴대폰에서도 가볍다.
+  // 가는 기둥(가로등 기둥, 나무 줄기)은 넣지 않는다. 지나갈 때마다 카메라가 확 당겨져 오히려 어지럽다.
+  var CAM_BLOCK = [], CAM_BLOCK_X = [];
+  (function () {
+    function bx(x0, x1, y0, y1, z0, z1, list) { (list || CAM_BLOCK).push([x0, x1, y0, y1, z0, z1]); }
+    W.SHOPS.forEach(function (sh) { bx(sh[0] - 3.2, sh[0] + 3.2, 0, 3.8, W.SHOP_Z - 2.7, W.SHOP_Z + 2.7); });
+    W.TREES.forEach(function (t, i) {
+      var sc = 0.9 + (i % 4) * 0.12, r = 1.45 * sc;
+      bx(t[0] - r, t[0] + r, 1.7, 2 + 3.6 * sc, t[1] - r, t[1] + r);                          // 잎
+    });
+    W.LAMPS.forEach(function (l) {
+      var dir = l[0] < 0 ? 1 : -1;
+      bx(Math.min(l[0], l[0] + dir * 1.2), Math.max(l[0], l[0] + dir * 1.2), 3.2, 3.95, l[1] - 0.4, l[1] + 0.4);   // 등
+    });
+    bx(W.XMAS.tree[0] - 2.1, W.XMAS.tree[0] + 2.1, 0, 7.5, W.XMAS.tree[1] - 2.1, W.XMAS.tree[1] + 2.1, CAM_BLOCK_X);
+  })();
+  // 선분 (ax,ay,az) → (bx,by,bz) 가 상자에 처음 닿는 비율(0~1). 안 닿으면 1.
+  function segHit(ax, ay, az, dx, dy, dz, b) {
+    var t0 = 0, t1 = 1, o = [ax, ay, az], d = [dx, dy, dz];
+    for (var k = 0; k < 3; k++) {
+      var lo = b[k * 2], hi = b[k * 2 + 1];
+      if (Math.abs(d[k]) < 1e-6) { if (o[k] < lo || o[k] > hi) return 1; continue; }
+      var u0 = (lo - o[k]) / d[k], u1 = (hi - o[k]) / d[k];
+      if (u0 > u1) { var tt = u0; u0 = u1; u1 = tt; }
+      if (u0 > t0) t0 = u0; if (u1 < t1) t1 = u1;
+      if (t0 > t1) return 1;
+    }
+    return t0;
+  }
+  function camClear(tx, ty, tz, cx, cy, cz) {
+    var dx = cx - tx, dy = cy - ty, dz = cz - tz, best = 1, i;
+    for (i = 0; i < CAM_BLOCK.length; i++) best = Math.min(best, segHit(tx, ty, tz, dx, dy, dz, CAM_BLOCK[i]));
+    if (xmasOn) for (i = 0; i < CAM_BLOCK_X.length; i++) best = Math.min(best, segHit(tx, ty, tz, dx, dy, dz, CAM_BLOCK_X[i]));
+    return best;                                                   // 0~1: 카메라까지 거리 중 비어 있는 비율
+  }
+  var camPull = 1;                                                  // 지금 쓰는 비율 (부드럽게 바뀐다)
 
   /* ---------- 캐릭터 (오리지널 디자인: 머리가 큰 양 사원 + 정장 + 사원증) ---------- */
   // 몸통(자켓) 타원체의 크기. 셔츠·넥타이·옷깃은 이 표면을 따라 붙인다.
@@ -268,10 +309,10 @@ function bonsaBoot() {
   function setTag(g, text, rep) {
     dropSprite(g.userData.tag); dropSprite(g.userData.repTag); g.userData.repTag = null;
     var tag = labelSprite(text, 0.42, { bg: 'rgba(20,28,40,0.78)', fs: 44, padX: 22, padY: 12 });
-    tag.position.y = TAG_Y; g.add(tag); g.userData.tag = tag; g.userData.tagText = text;
+    onTop(tag); tag.position.y = TAG_Y; g.add(tag); g.userData.tag = tag; g.userData.tagText = text;
     if (rep) {                                                     // 층 대표자: 이름표 위에 금색 띠
       var rt = labelSprite('★ ' + rep + '층 대표', 0.32, { bg: 'rgba(214,160,30,0.95)', color: '#ffffff', fs: 40, padX: 18, padY: 8 });
-      rt.position.y = TAG_Y + 0.4; g.add(rt); g.userData.repTag = rt;
+      onTop(rt); rt.position.y = TAG_Y + 0.4; g.add(rt); g.userData.repTag = rt;
     }
     g.userData.rep = rep || 0;
   }
@@ -279,7 +320,7 @@ function bonsaBoot() {
     dropSprite(g.userData.bubble);
     var short = text.length > 28 ? text.slice(0, 28) + '…' : text;
     var b = labelSprite(short, 0.46, { bg: '#ffffff', color: '#1c2430', fs: 44, radius: 26 });
-    b.position.y = BUBBLE_Y + (g.userData.repTag ? 0.4 : 0); g.add(b);
+    onTop(b); b.position.y = BUBBLE_Y + (g.userData.repTag ? 0.4 : 0); g.add(b);
     g.userData.bubble = b; g.userData.bubbleUntil = performance.now() + 5000;
   }
   // 캐릭터: 두 발로 서는 양 모양의 사원. 직접 디자인한 모습이다.
@@ -1369,11 +1410,14 @@ function bonsaBoot() {
     // 건물 정문 옆 화환, 길 위 현수막
     wreath(xo, -3.55, 2.3, 6.45, 0, 0.9); wreath(xo, 3.55, 2.3, 6.45, 0, 0.9);
     var banner = signPlane('메리 크리스마스', 0.7, { fs: 96, bg: '#c62828', color: '#ffffff', radius: 18, padX: 36, padY: 12 });
-    banner.position.set(0, 4.35, 17.02); banner.material.side = THREE.DoubleSide; banner.userData.ns = true; xo.add(banner);
+    banner.position.set(0, 4.85, 17.02); banner.userData.ns = true; xo.add(banner);
+    // 뒷면에도 글씨가 바로 읽히도록 같은 현수막을 뒤로 돌려 한 장 더 붙인다 (한 장을 양면으로 쓰면 뒤에서 글씨가 거꾸로 보인다)
+    var bannerBack = new THREE.Mesh(banner.geometry, banner.material); bannerBack.rotation.y = Math.PI;
+    bannerBack.position.set(0, 4.85, 16.99); bannerBack.userData.ns = true; xo.add(bannerBack);
     var bw = banner.geometry.parameters.width / 2;
     [[-bw + 0.1, -3.3], [bw - 0.1, 3.3]].forEach(function (q) {                                             // 현수막 끈
-      var len = Math.hypot(q[1] - q[0], 3.85 - 4.65), rope = box(len, 0.03, 0.03, 0x3a3a3a, (q[0] + q[1]) / 2, 4.25, 17.02, xo);
-      rope.rotation.z = Math.atan2(3.85 - 4.65, q[1] - q[0]);
+      var len = Math.hypot(q[1] - q[0], 3.85 - 5.15), rope = box(len, 0.03, 0.03, 0x3a3a3a, (q[0] + q[1]) / 2, 4.5, 17.02, xo);
+      rope.rotation.z = Math.atan2(3.85 - 5.15, q[1] - q[0]);
     });
     // 알전구: 건물 모서리와 지붕선, 1층 위, 정문 차양, 가게 지붕선, 가로등 사이, 길 건너
     var str = [];
@@ -3076,11 +3120,18 @@ function bonsaBoot() {
       cx = Math.max(-LW / 2 + 0.4, Math.min(LW / 2 - 0.4, cx));
       cz = Math.max(-LD / 2 + 0.4, Math.min(LD / 2 - 0.4, cz));
       cyy = Math.min(LH - 0.4, cyy);
-    } else if (cx > -8.6 && cx < 8.6 && cz > -6.6 && cz < 6.6) {
-      // 카메라가 건물 안으로 파고들지 않게 가장 가까운 벽 밖으로 밀어낸다
-      var px0 = cx + 8.6, px1 = 8.6 - cx, pz0 = cz + 6.6, pz1 = 6.6 - cz;
-      var mn = Math.min(px0, px1, pz0, pz1);
-      if (mn === pz1) cz = 6.6; else if (mn === pz0) cz = -6.6; else if (mn === px1) cx = 8.6; else cx = -8.6;
+    } else {
+      if (cx > -8.6 && cx < 8.6 && cz > -6.6 && cz < 6.6) {
+        // 카메라가 건물 안으로 파고들지 않게 가장 가까운 벽 밖으로 밀어낸다
+        var px0 = cx + 8.6, px1 = 8.6 - cx, pz0 = cz + 6.6, pz1 = 6.6 - cz;
+        var mn = Math.min(px0, px1, pz0, pz1);
+        if (mn === pz1) cz = 6.6; else if (mn === pz0) cz = -6.6; else if (mn === px1) cx = 8.6; else cx = -8.6;
+      }
+      // 사이에 물체가 끼면 그 바로 앞까지 카메라를 당긴다. 당길 때는 바로, 물러날 때는 천천히.
+      var fullLen = Math.hypot(cx - P.x, cyy - 1.3, cz - P.z) || 1;
+      var want = Math.max(2.2 / fullLen, camClear(P.x, 1.3, P.z, cx, cyy, cz) - 0.35 / fullLen);
+      camPull = want < camPull ? want : camPull + (want - camPull) * Math.min(1, dt * 2.5);
+      cx = P.x + (cx - P.x) * camPull; cyy = 1.3 + (cyy - 1.3) * camPull; cz = P.z + (cz - P.z) * camPull;
     }
     camera.position.set(cx, cyy, cz);
     camera.lookAt(P.x, inShop ? -0.34 : 1.3, P.z);
