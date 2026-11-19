@@ -5,7 +5,7 @@
   var $ = function (id) { return document.getElementById(id); };
   var RANKS = { owner: '총관리자', ceo: '사장', manager: '부장', lead: '팀장', deputy: '부팀장', staff: '사원', intern: '인턴' };
   var RANK_SET = ['intern', 'staff', 'deputy', 'lead', 'manager', 'ceo'];
-  var TABS = [['overview', '개요'], ['users', '사용자'], ['floors', '층'], ['posts', '게시판'], ['events', '이벤트'], ['shop', '상점 값'], ['config', '안내원·공지·설정'], ['logs', '기록']];
+  var TABS = [['overview', '개요'], ['users', '사용자'], ['floors', '층'], ['posts', '게시판'], ['events', '이벤트'], ['village', '마을·게임'], ['shop', '상점 값'], ['config', '안내원·공지·설정'], ['logs', '기록']];
   var cur = 'overview', msgTimer = 0;
 
   function say(t) { $('msg').textContent = t; $('msg').style.display = 'block'; clearTimeout(msgTimer); msgTimer = setTimeout(function () { $('msg').style.display = 'none'; }, 3200); }
@@ -141,6 +141,46 @@
         show([card('진행 중인 이벤트', '', [rows.length ? table(['이벤트', '보상', '만든 사람', '판정 대기', '보상 받음', ''], rows) : el('div', { text: '진행 중인 이벤트가 없습니다.' })])]);
       });
     },
+    village: function () {
+      return act('village').then(function (r) {
+        var G = {}; r.games.forEach(function (g) { G[g[0]] = g; });
+        var fmt = function (k, v) { return k === 't25' ? (v / 1000).toFixed(2) + '초' : v + G[k][2]; };
+        // 주간 랭킹과 보상 코인
+        var prize = r.ranks.prize.map(function (v) { return el('input', { type: 'number', value: v, min: '0', max: '100000', style: 'width:90px' }); });
+        var saveP = el('button', { cls: 'ghost', text: '보상 저장', on: function () {
+          act('prize.set', { prize: prize.map(function (i) { return Number(i.value); }) }).then(function () { say('주간 보상을 저장했습니다.'); });
+        } });
+        var rankRows = [];
+        r.games.forEach(function (g) {
+          var now = (r.ranks.games[g[0]] || []).slice(0, 5).map(function (x, i) { return (i + 1) + '. ' + x[0] + ' ' + fmt(g[0], x[1]); }).join(', ') || '기록 없음';
+          var prev = (r.ranks.prev[g[0]] || []).map(function (x, i) { return (i + 1) + '. ' + x[0]; }).join(', ') || '-';
+          rankRows.push([g[1], el('td', { cls: 'wrap', text: now }), el('td', { cls: 'wrap', text: prev })]);
+        });
+        var c1 = card('플레이존 랭킹 (이번 주 ' + r.ranks.week + '~)', '매주 월요일 0시(한국 시각)에 마감하고, 서버가 게임마다 지난주 1~3위에게 아래 코인을 한 번 줍니다. 지급 내역은 기록 탭(money)에 남습니다.',
+          [el('div', {}, ['1위 ', prize[0], ' 2위 ', prize[1], ' 3위 ', prize[2], ' ', saveP]), table(['게임', '이번 주 1~5위', '지난주 1~3위 (보상 받음)'], rankRows)]);
+        // 2층 글
+        var pRows = r.prayers.map(function (p) {
+          var b = el('button', { cls: p[5] ? 'ghost' : 'danger', text: p[5] ? '다시 보이기' : '숨기기', on: function () {
+            act('prayer.hide', { id: p[0], hidden: !p[5] }).then(function () { go('village'); });
+          } });
+          return [p[1], p[2], el('td', { cls: 'wrap', text: p[3] }), stamp(p[4]), p[5] ? '숨김' : '', b];
+        });
+        var c2 = card('나무 회사 2층 글 (최근 ' + r.prayers.length + '개)', '숨기면 2층 화면에서 바로 사라집니다.', [pRows.length ? table(['마을', '쓴 사람', '글', '시각', '', ''], pRows) : el('div', { text: '글이 없습니다.' })]);
+        // 열매
+        var fCards = r.fruits.map(function (f) {
+          var rows = f[2].map(function (x) {
+            return [x[1], x[2], stamp(x[3]), twice(el('button', { cls: 'danger', text: '삭제' }), '삭제', function () { act('fruit.del', { id: x[0] }).then(function () { go('village'); }); })];
+          });
+          return el('div', {}, [el('b', { text: f[0] + ' 나무 · 전체 ' + f[1] + '개' }), rows.length ? table(['이름', '맺은 사람', '시각', ''], rows) : el('div', { text: '열매가 없습니다.' })]);
+        });
+        var c3 = card('나무 회사 1층 열매 (마을별 최근 30개)', '나무에는 최근 20개만 달리고 기록은 모두 남습니다.', fCards);
+        // 출입명부
+        var eRows = r.entries.map(function (e) { return [e[0], e[1], stamp(e[2])]; });
+        var c4 = card('출입명부 (최근 ' + eRows.length + '건)', '본사·나무 회사·플레이존에 들어간 기록입니다. 같은 사람이 같은 곳을 3분 안에 다시 들어가면 한 번만 적고, 180일 동안 보관합니다.',
+          [eRows.length ? table(['닉네임', '장소', '시각'], eRows) : el('div', { text: '기록이 없습니다.' })]);
+        show([c1, c2, c3, c4]);
+      });
+    },
     shop: function () {
       return act('shop').then(function (r) {
         var rows = r.list.map(function (s) {
@@ -179,7 +219,7 @@
         var sel = el('select');
         [['', '전체'], ['rank', '직급 변경'], ['money', '코인 이동'], ['admin_login', '관리자 로그인'], ['admin_rank', '관리자: 직급'], ['admin_money', '관리자: 코인'],
           ['admin_ban', '관리자: 정지'], ['admin_backup', '관리자: 백업'], ['admin_post', '관리자: 게시판'], ['admin_shop', '관리자: 값'], ['admin_config', '관리자: 설정'], ['floor_name', '층 이름'],
-          ['floor12_pass', '12층 비밀번호'], ['floor_rep', '층 대표자'], ['megaphone', '확성기'], ['event_new', '이벤트 생성'], ['event_close', '이벤트 종료']].forEach(function (o) {
+          ['floor12_pass', '12층 비밀번호'], ['floor_rep', '층 대표자'], ['megaphone', '확성기'], ['admin_prayer', '2층 글 관리'], ['admin_fruit', '열매 삭제'], ['admin_prize', '주간 보상 변경'], ['event_new', '이벤트 생성'], ['event_close', '이벤트 종료']].forEach(function (o) {
           var x = el('option', { value: o[0], text: o[1] }); if (o[0] === (filter || '')) x.selected = true; sel.appendChild(x);
         });
         sel.addEventListener('change', function () { VIEWS.logs(sel.value); });

@@ -170,13 +170,12 @@
   // extra: 그 층에 놓인 가구의 충돌 영역 (서버와 화면이 같은 목록을 넘긴다)
   function blocked(area, x, z, extra) {
     var list, i, b;
-    if (area === 'out') {
+    if (isOut(area)) {
       if (x < -OUT_LIMIT || x > OUT_LIMIT || z < -OUT_LIMIT || z > OUT_LIMIT) return true;
-      list = colOut;
     } else {
       if (x < -LW / 2 + R || x > LW / 2 - R || z < -LD / 2 + R || z > LD / 2 - R) return true;
-      list = area === 'in' ? colIn : (area === 'f12' ? col12 : colFloor);
     }
+    list = colsOf(area);
     for (i = 0; i < list.length; i++) {
       b = list[i];
       if (x > b.x0 - R && x < b.x1 + R && z > b.z0 - R && z < b.z1 + R) return true;
@@ -188,18 +187,114 @@
     return false;
   }
   // 문 앞에 서 있으면 이동할 장소를 돌려준다. slack 은 서버 검증용 여유.
-  function door(area, x, z, slack) {
+  function door(area, x, z, slack) { return door2(area, x, z, slack); }
+  var SPAWN = { start: { x: 0, z: 24 }, in: { x: 0, z: 6.6 }, out: { x: 0, z: 9.5 } };
+
+  // ================= 마을 (무거·삼산·성남) =================
+  // 본사가 있는 무거마을의 야외가 'out', 삼산·성남은 'o_sa', 'o_sn'. 세 마을은 땅·나무·가게 배치가 같고,
+  // 가운데에 무거는 본사 건물, 삼산·성남은 마을 엘리베이터와 분수가 있다.
+  // 마을마다 나무 회사(1층 'nm1_마을', 2층 'nm2_마을')와 플레이존('pz_마을')이 같은 자리에 있다.
+  var VKEYS = ['mu', 'sa', 'sn'];
+  var VILLAGES = { mu: { n: '무거마을', out: 'out' }, sa: { n: '삼산마을', out: 'o_sa' }, sn: { n: '성남마을', out: 'o_sn' } };
+  var NAMU = { x: -28, z: -2, w: 12, d: 9 }, PLAY = { x: 28, z: -2, w: 12, d: 9 };   // 건물 자리와 크기 (문은 +z 쪽 가운데)
+  var BOOTH = { x: 0, z: 3 }, FOUNTAIN = { x: 0, z: -4 }, VSIGN = { x: 0, z: -9.5 };   // 삼산·성남 가운데
+  colOut.push(c(NAMU.x, NAMU.z, NAMU.w, NAMU.d), c(PLAY.x, PLAY.z, PLAY.w, PLAY.d));
+  var colVillage = colOut.filter(function (b) { return !(b.x0 === -8 && b.x1 === 8 && b.z0 === -6 && b.z1 === 6); })   // 본사 자리를 비운다
+    .concat([c(BOOTH.x, BOOTH.z, 3.4, 3.4), c(FOUNTAIN.x, FOUNTAIN.z, 4.6, 4.6), c(VSIGN.x, VSIGN.z, 8.4, 0.8)]);
+  function isOut(a) { return a === 'out' || a === 'o_sa' || a === 'o_sn'; }
+  function kindOf(a) {
+    if (isOut(a)) return 'out';
+    if (a === 'in') return 'in';
+    var m = /^(nm1|nm2|pz)_(mu|sa|sn)$/.exec(a || '');
+    if (m) return m[1];
+    return floorOf(a) ? 'floor' : '';
+  }
+  // 그 장소가 속한 마을 (본사 건물 안은 무거마을)
+  function villageOf(a) {
+    if (a === 'o_sa') return 'sa';
+    if (a === 'o_sn') return 'sn';
+    var m = /^(?:nm1|nm2|pz)_(mu|sa|sn)$/.exec(a || '');
+    if (m) return m[1];
+    return a === 'out' || a === 'in' || floorOf(a) ? 'mu' : '';
+  }
+  function allAreas() {
+    var list = ['out', 'in', 'o_sa', 'o_sn'], n;
+    for (n = FLOOR_MIN; n <= FLOOR_MAX; n++) list.push('f' + n);
+    VKEYS.forEach(function (v) { list.push('nm1_' + v, 'nm2_' + v, 'pz_' + v); });
+    return list;
+  }
+  // 건물 안 (나무 회사, 플레이존). 방 크기는 로비와 같고, 문은 앞쪽(+z) 가운데에 있다.
+  var NM_TREE = { x: 0, z: -1 };                                   // 1층 가운데 큰 나무
+  var NM_STAIRS1 = { x: 9.2, z: -6.4 }, NM_STAIRS2 = { x: 9.2, z: 6.2 };   // 계단 앞 (1층 뒤 오른쪽, 2층 앞 오른쪽)
+  var NM_BOOK = { x: -8.5, z: 6.2 }, NM_BOARD = { x: -5.5, z: -1.5 };       // 출입명부 책상, 열매 기록판
+  var NM2_CAP = 20;
+  var CUSHIONS = [];                                               // 2층 방석 20개
+  [-3.2, -0.6, 2, 4.6].forEach(function (z) { [-6, -3, 0, 3, 6].forEach(function (x) { CUSHIONS.push([x, z]); }); });
+  var colNm1 = [c(NM_TREE.x, NM_TREE.z, 3.4, 3.4), c(9.2, -8.2, 3.2, 1.6), c(NM_BOOK.x, NM_BOOK.z + 0.9, 1.4, 0.8), c(NM_BOARD.x - 0.5, NM_BOARD.z, 0.4, 1.8)];
+  var colNm2 = [c(9.2, 8.2, 3.2, 1.6), c(0, -7.9, 3.4, 1.2)];       // 내려가는 계단, 단상
+  var CABINETS = [{ g: 'mem', x: -6 }, { g: 'math', x: 0 }, { g: 't25', x: 6 }];   // 게임기 (뒤 벽 앞, z -7.8)
+  var RANK_BOARD = { x: -10.6, z: 0 };                             // 랭킹판 (왼쪽 벽)
+  var colPz = CABINETS.map(function (k) { return c(k.x, -8.0, 1.8, 1.6); }).concat([c(-11.6, 0, 0.6, 6)]);
+  var GAMES = {
+    mem: { n: '숫자 기억', unit: '단계', high: true, note: '숫자가 잠깐 보였다 사라지면 그대로 입력합니다. 단계마다 한 자리씩 늘어납니다.' },
+    math: { n: '암산 60초', unit: '문제', high: true, note: '60초 동안 계산 문제를 최대한 많이 맞힙니다.' },
+    t25: { n: '1부터 25까지', unit: '초', high: false, note: '흩어진 1~25를 순서대로 빨리 누릅니다. 시간이 짧을수록 높은 순위입니다.' }
+  };
+  var RANK_PRIZE = [300, 200, 100];                               // 매주 게임마다 1~3위 코인 (관리자 화면에서 바꿈)
+  var FRUIT_SHOW = 20, FRUIT_NAME = 10, PRAY_LEN = 100;
+  // 2층 음악 (모두가 같은 곡의 같은 부분을 듣도록 서버 시각으로 맞춘다). d 는 초.
+  var MUSIC = [{ f: '/music/song1.mp3', d: 2417.06 }, { f: '/music/song2.mp3', d: 1995.68 }, { f: '/music/song3.mp3', d: 2171.12 }];
+
+  // 장소별 부딪힘 판정 목록
+  function colsOf(area) {
+    var k = kindOf(area);
+    if (k === 'out') return area === 'out' ? colOut : colVillage;
+    if (k === 'in') return colIn;
+    if (k === 'nm1') return colNm1;
+    if (k === 'nm2') return colNm2;
+    if (k === 'pz') return colPz;
+    return area === 'f12' ? col12 : colFloor;
+  }
+  // 문 앞에 서 있으면 이동할 장소 (본사 정문, 나무 회사, 플레이존, 각 건물 안의 문)
+  function door2(area, x, z, slack) {
+    var k = kindOf(area), v = villageOf(area);
     slack = slack || 0;
-    if (area === 'out' && Math.abs(x) < 1.5 + slack && z > 6 - slack && z < 7.1 + slack) return 'in';
-    if (area === 'in' && Math.abs(x) < 1.5 + slack && z > LD / 2 - 0.85 - slack) return 'out';
+    if (k === 'out') {
+      if (area === 'out' && Math.abs(x) < 1.5 + slack && z > 6 - slack && z < 7.1 + slack) return 'in';
+      var fz = NAMU.z + NAMU.d / 2;
+      if (z > fz - slack && z < fz + 1.1 + slack) {
+        if (Math.abs(x - NAMU.x) < 1.4 + slack) return 'nm1_' + v;
+        if (Math.abs(x - PLAY.x) < 1.4 + slack) return 'pz_' + v;
+      }
+      return null;
+    }
+    if ((k === 'in' || k === 'nm1' || k === 'pz') && Math.abs(x) < 1.5 + slack && z > LD / 2 - 0.85 - slack) return VILLAGES[v].out;
     return null;
   }
-  var SPAWN = { start: { x: 0, z: 24 }, in: { x: 0, z: 6.6 }, out: { x: 0, z: 9.5 } };
+  // 들어갈 때 서는 자리
+  function spawnOf(from, to) {
+    var k = kindOf(to);
+    if (k === 'out') {
+      var fk = kindOf(from), fz = NAMU.z + NAMU.d / 2 + 1.9;
+      if (fk === 'nm1') return { x: NAMU.x, z: fz, f: 0 };
+      if (fk === 'pz') return { x: PLAY.x, z: fz, f: 0 };
+      if (fk === 'in') return { x: SPAWN.out.x, z: SPAWN.out.z, f: 0 };
+      return { x: BOOTH.x, z: BOOTH.z + 6, f: 0 };                 // 마을 엘리베이터에서 내림 (광장 쪽)
+    }
+    if (k === 'nm2') return { x: NM_STAIRS2.x - 1.8, z: NM_STAIRS2.z - 1.2, f: Math.PI };
+    if (k === 'nm1' && kindOf(from) === 'nm2') return { x: NM_STAIRS1.x - 1.2, z: NM_STAIRS1.z + 0.6, f: 0 };
+    return { x: 0, z: LD / 2 - 2.4, f: Math.PI };
+  }
+  function near(x, z, p, r) { var dx = x - p.x, dz = z - p.z; return dx * dx + dz * dz < r * r; }
 
   return { LW: LW, LD: LD, LH: LH, R: R, SPEED: SPEED, TREES: TREES, SHOPS: SHOPS, SHOP_Z: SHOP_Z,
     PLANTS: PLANTS, NPCS: NPCS, LAMPS: LAMPS, FLAG: FLAG, BENCHES: BENCHES, PLANTERS: PLANTERS, BINS: BINS, XMAS: XMAS, XMAS_OUT: XMAS_OUT, XMAS_IN: XMAS_IN,
     FLOOR_MIN: FLOOR_MIN, FLOOR_MAX: FLOOR_MAX, FLOOR_REG_MAX: FLOOR_REG_MAX, FLOOR_CAP: FLOOR_CAP,
     COSM: COSM, MEGA: MEGA, PASS_MIN: PASS_MIN, SUIT_DEF: SUIT_DEF, LOOK_SLOTS: LOOK_SLOTS, START_MONEY: START_MONEY, EVENT_REWARD_MAX: EVENT_REWARD_MAX, EVENT_OPEN_MAX: EVENT_OPEN_MAX,
     FURN: FURN, FURN_CAP: FURN_CAP, furnSize: furnSize, snap: snap, furnRect: furnRect, furnOk: furnOk, seatPos: seatPos,
-    ELEV: ELEV, ELEV_OUT: ELEV_OUT, KIOSK: KIOSK, floorOf: floorOf, areaOf: areaOf, nearElev: nearElev, blocked: blocked, door: door, SPAWN: SPAWN };
+    ELEV: ELEV, ELEV_OUT: ELEV_OUT, KIOSK: KIOSK, floorOf: floorOf, areaOf: areaOf, nearElev: nearElev, blocked: blocked, door: door, SPAWN: SPAWN,
+    VKEYS: VKEYS, VILLAGES: VILLAGES, NAMU: NAMU, PLAY: PLAY, BOOTH: BOOTH, FOUNTAIN: FOUNTAIN, VSIGN: VSIGN, isOut: isOut, kindOf: kindOf, villageOf: villageOf,
+    allAreas: allAreas, spawnOf: spawnOf, near: near, NM_TREE: NM_TREE, NM_STAIRS1: NM_STAIRS1, NM_STAIRS2: NM_STAIRS2, NM_BOOK: NM_BOOK, NM_BOARD: NM_BOARD,
+    NM2_CAP: NM2_CAP, CUSHIONS: CUSHIONS, CABINETS: CABINETS, RANK_BOARD: RANK_BOARD, GAMES: GAMES, RANK_PRIZE: RANK_PRIZE,
+    FRUIT_SHOW: FRUIT_SHOW, FRUIT_NAME: FRUIT_NAME, PRAY_LEN: PRAY_LEN, MUSIC: MUSIC };
 });

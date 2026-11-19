@@ -99,3 +99,39 @@ ALTER TABLE floors ADD COLUMN IF NOT EXISTS rep INTEGER REFERENCES users(id);
 
 -- 1.7.0: 자동 로그인. 비밀번호를 바꾸면 token_ver 가 올라가 예전 로그인 토큰이 모두 무효가 된다
 ALTER TABLE users ADD COLUMN IF NOT EXISTS token_ver INTEGER NOT NULL DEFAULT 0;
+
+-- 1.8.0: 마을 (나무 회사 열매, 2층 기도 글, 출입명부, 플레이존 게임 점수)
+CREATE TABLE IF NOT EXISTS fruits (
+  id SERIAL PRIMARY KEY,
+  village TEXT NOT NULL,
+  name TEXT NOT NULL,
+  uid INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS fruits_village_idx ON fruits (village, id DESC);
+CREATE TABLE IF NOT EXISTS prayers (
+  id SERIAL PRIMARY KEY,
+  village TEXT NOT NULL,
+  uid INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  nickname TEXT NOT NULL,
+  body TEXT NOT NULL,
+  hidden BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS prayers_village_idx ON prayers (village, id DESC);
+CREATE TABLE IF NOT EXISTS entry_log (
+  id BIGSERIAL PRIMARY KEY,
+  uid INTEGER,
+  nickname TEXT NOT NULL,
+  place TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS entry_log_place_idx ON entry_log (place, id DESC);
+CREATE TABLE IF NOT EXISTS game_scores (
+  game TEXT NOT NULL,
+  week TEXT NOT NULL,
+  uid INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  score INTEGER NOT NULL,
+  at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (game, week, uid)
+);

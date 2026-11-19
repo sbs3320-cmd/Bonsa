@@ -33,7 +33,7 @@ const FILES = {
 };
 const fontCache = new Map();          // 글꼴·아이콘은 한 번 압축해 두고 다시 쓴다
 const CSP = "default-src 'self'; script-src 'self' https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline'; " +
-  "img-src 'self' data: blob:; connect-src 'self' https://cdnjs.cloudflare.com; worker-src 'self'; manifest-src 'self'; " +
+  "img-src 'self' data: blob:; connect-src 'self' https://cdnjs.cloudflare.com; media-src 'self'; worker-src 'self'; manifest-src 'self'; " +
   "frame-ancestors 'none'; base-uri 'none'; form-action 'self'";
 // 관리자 화면은 외부 스크립트를 전혀 쓰지 않는다
 const ADMIN_CSP = "default-src 'self'; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'";
@@ -166,6 +166,29 @@ const server = http.createServer((req, res) => {
     });
   })) return;
 
+  // 나무 회사 2층 음악: 큰 파일이라 메모리에 올리지 않고 흘려보낸다. 원하는 곳부터 들을 수 있게 구간 요청(Range)을 받는다.
+  const song = (req.method === 'GET' || req.method === 'HEAD') && /^\/music\/song[1-3]\.mp3$/.test(url) ? path.join(PUBLIC, url) : null;
+  if (song) {
+    fs.stat(song, (err, st) => {
+      if (err) { res.writeHead(404); return res.end(); }
+      const head = { 'Content-Type': 'audio/mpeg', 'Accept-Ranges': 'bytes', 'Cache-Control': 'public, max-age=604800' };
+      const m = /^bytes=(\d*)-(\d*)$/.exec(req.headers.range || '');
+      let start = 0, end = st.size - 1, code = 200;
+      if (m && (m[1] || m[2])) {
+        if (m[1]) { start = Number(m[1]); if (m[2]) end = Math.min(Number(m[2]), st.size - 1); }
+        else { start = Math.max(0, st.size - Number(m[2])); }
+        if (start > end || start >= st.size) { res.writeHead(416, { 'Content-Range': 'bytes */' + st.size }); return res.end(); }
+        code = 206; head['Content-Range'] = 'bytes ' + start + '-' + end + '/' + st.size;
+      }
+      head['Content-Length'] = end - start + 1;
+      res.writeHead(code, head);
+      if (req.method === 'HEAD') return res.end();
+      const rs = fs.createReadStream(song, { start, end });
+      rs.on('error', () => res.destroy()); res.on('close', () => rs.destroy());
+      rs.pipe(res);
+    });
+    return;
+  }
   const file = req.method === 'GET' ? FILES[url] : null;
   if (!file) { res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' }); return res.end('Not found'); }
   if (file[2]) {

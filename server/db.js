@@ -175,6 +175,63 @@ function pgStore() {
     async setPassword(uid, hash) { const r = await pool.query('UPDATE users SET pass_hash = $2, token_ver = token_ver + 1 WHERE id = $1 RETURNING token_ver', [uid, hash]); return r.rows.length ? r.rows[0].token_ver : 0; },
     // ---- 총관리자 화면용 ----
     async getSetting(key) { const r = await pool.query('SELECT value FROM settings WHERE key = $1', [key]); return r.rows.length ? r.rows[0].value : null; },
+    // 없을 때만 넣는다. 넣었으면 true (주간 보상을 한 번만 주는 데 쓴다)
+    async claimSetting(key, value) { const r = await pool.query('INSERT INTO settings (key, value) VALUES ($1, $2) ON CONFLICT (key) DO NOTHING RETURNING key', [key, value]); return r.rows.length > 0; },
+    // ---- 마을: 열매, 기도 글, 출입명부, 게임 점수 ----
+    async addFruit(village, name, uid) {
+      const r = await pool.query('INSERT INTO fruits (village, name, uid) VALUES ($1, $2, $3) RETURNING id, name, created_at', [village, name, uid]);
+      return r.rows[0];
+    },
+    async listFruits(village, limit, offset) {
+      const r = await pool.query('SELECT f.id, f.name, f.created_at, u.nickname AS by FROM fruits f LEFT JOIN users u ON u.id = f.uid '
+        + 'WHERE f.village = $1 ORDER BY f.id DESC LIMIT $2 OFFSET $3', [village, limit, offset]);
+      const c = await pool.query('SELECT count(*)::int AS n FROM fruits WHERE village = $1', [village]);
+      return { rows: r.rows, total: c.rows[0].n };
+    },
+    async deleteFruit(id) { const r = await pool.query('DELETE FROM fruits WHERE id = $1 RETURNING village', [id]); return r.rows.length ? r.rows[0].village : null; },
+    async addPrayer(village, uid, nickname, body) {
+      const r = await pool.query('INSERT INTO prayers (village, uid, nickname, body) VALUES ($1, $2, $3, $4) RETURNING id, created_at', [village, uid, nickname, body]);
+      return r.rows[0];
+    },
+    async listPrayers(village, limit) {
+      const r = await pool.query('SELECT id, nickname, body, created_at FROM prayers WHERE village = $1 AND NOT hidden ORDER BY id DESC LIMIT $2', [village, limit]);
+      return r.rows;
+    },
+    async listPrayersAdmin(limit) {
+      const r = await pool.query('SELECT id, village, uid, nickname, body, hidden, created_at FROM prayers ORDER BY id DESC LIMIT $1', [limit]);
+      return r.rows;
+    },
+    async hidePrayer(id, hidden) { const r = await pool.query('UPDATE prayers SET hidden = $2 WHERE id = $1 RETURNING village', [id, hidden]); return r.rows.length ? r.rows[0].village : null; },
+    async logEntry(uid, nickname, place) { await pool.query('INSERT INTO entry_log (uid, nickname, place) VALUES ($1, $2, $3)', [uid, nickname, place]); },
+    async listVisits(places, limit) {
+      const r = places
+        ? await pool.query('SELECT uid, nickname, place, created_at FROM entry_log WHERE place = ANY($1) ORDER BY id DESC LIMIT $2', [places, limit])
+        : await pool.query('SELECT uid, nickname, place, created_at FROM entry_log ORDER BY id DESC LIMIT $1', [limit]);
+      return r.rows;
+    },
+    async pruneEntries(days) { await pool.query("DELETE FROM entry_log WHERE created_at < now() - ($1 || ' days')::interval", [String(days)]); },
+    // 그 주 최고 기록만 남긴다. high: 높을수록 좋음
+    async saveScore(game, week, uid, score, high) {
+      const cmp = high ? 'EXCLUDED.score > game_scores.score' : 'EXCLUDED.score < game_scores.score';
+      const r = await pool.query('INSERT INTO game_scores (game, week, uid, score) VALUES ($1, $2, $3, $4) '
+        + 'ON CONFLICT (game, week, uid) DO UPDATE SET score = EXCLUDED.score, at = now() WHERE ' + cmp + ' RETURNING score', [game, week, uid, score]);
+      if (r.rows.length) return { best: r.rows[0].score, improved: true };
+      const b = await pool.query('SELECT score FROM game_scores WHERE game = $1 AND week = $2 AND uid = $3', [game, week, uid]);
+      return { best: b.rows[0].score, improved: false };
+    },
+    async topScores(game, week, limit, high) {
+      const r = await pool.query('SELECT g.uid, g.score, u.nickname FROM game_scores g JOIN users u ON u.id = g.uid '
+        + 'WHERE g.game = $1 AND g.week = $2 AND NOT u.banned ORDER BY g.score ' + (high ? 'DESC' : 'ASC') + ', g.at ASC LIMIT $3', [game, week, limit]);
+      return r.rows;
+    },
+    async scoreRank(game, week, score, high) {
+      const r = await pool.query('SELECT count(*)::int AS n FROM game_scores WHERE game = $1 AND week = $2 AND score ' + (high ? '>' : '<') + ' $3', [game, week, score]);
+      return r.rows[0].n + 1;
+    },
+    async myScore(game, week, uid) {
+      const r = await pool.query('SELECT score FROM game_scores WHERE game = $1 AND week = $2 AND uid = $3', [game, week, uid]);
+      return r.rows.length ? r.rows[0].score : null;
+    },
     async setSetting(key, value) { await pool.query('INSERT INTO settings (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = $2', [key, value]); },
     async delSetting(key) { await pool.query('DELETE FROM settings WHERE key = $1', [key]); },
     async adminUsers() {
@@ -288,6 +345,7 @@ function pgStore() {
 
 function memoryStore() {
   const users = [], floors = [], log = [], posts = [], furn = [], events = [], entries = [], settings = {};
+  const mv = { fruits: [], prayers: [], entries: [], scores: [], fruitId: 0, prayId: 0, entryId: 0 };   // 마을 기록
   let seq = 0, postSeq = 0, furnSeq = 0, eventSeq = 0;
   function row(floor) {
     let f = floors.find(x => x.floor === floor);
@@ -371,6 +429,33 @@ function memoryStore() {
     async deleteFurniture(id) { const i = furn.findIndex(y => y.id === id); if (i < 0) return false; furn.splice(i, 1); return true; },
     async setPassword(uid, hash) { const u = users.find(x => x.id === uid); if (!u) return 0; u.pass_hash = hash; u.token_ver = (u.token_ver || 0) + 1; return u.token_ver; },
     async getSetting(key) { return Object.prototype.hasOwnProperty.call(settings, key) ? settings[key] : null; },
+    async claimSetting(key, value) { if (Object.prototype.hasOwnProperty.call(settings, key)) return false; settings[key] = value; return true; },
+    async addFruit(village, name, uid) { const f = { id: ++mv.fruitId, village, name, uid, created_at: new Date() }; mv.fruits.push(f); return f; },
+    async listFruits(village, limit, offset) {
+      const all = mv.fruits.filter(f => f.village === village).sort((a, b) => b.id - a.id);
+      return { rows: all.slice(offset, offset + limit).map(f => ({ ...f, by: (users.find(u => u.id === f.uid) || {}).nickname })), total: all.length };
+    },
+    async deleteFruit(id) { const i = mv.fruits.findIndex(f => f.id === id); if (i < 0) return null; return mv.fruits.splice(i, 1)[0].village; },
+    async addPrayer(village, uid, nickname, body) { const r = { id: ++mv.prayId, village, uid, nickname, body, hidden: false, created_at: new Date() }; mv.prayers.push(r); return r; },
+    async listPrayers(village, limit) { return mv.prayers.filter(x => x.village === village && !x.hidden).sort((a, b) => b.id - a.id).slice(0, limit); },
+    async listPrayersAdmin(limit) { return mv.prayers.slice().sort((a, b) => b.id - a.id).slice(0, limit); },
+    async hidePrayer(id, hidden) { const x = mv.prayers.find(r => r.id === id); if (!x) return null; x.hidden = hidden; return x.village; },
+    async logEntry(uid, nickname, place) { mv.entries.push({ id: ++mv.entryId, uid, nickname, place, created_at: new Date() }); },
+    async listVisits(places, limit) { return mv.entries.filter(e => !places || places.includes(e.place)).sort((a, b) => b.id - a.id).slice(0, limit); },
+    async pruneEntries() {},
+    async saveScore(game, week, uid, score, high) {
+      let r = mv.scores.find(x => x.game === game && x.week === week && x.uid === uid);
+      if (!r) { mv.scores.push(r = { game, week, uid, score, at: Date.now() }); return { best: score, improved: true }; }
+      if (high ? score > r.score : score < r.score) { r.score = score; r.at = Date.now(); return { best: score, improved: true }; }
+      return { best: r.score, improved: false };
+    },
+    async topScores(game, week, limit, high) {
+      return mv.scores.filter(x => x.game === game && x.week === week).map(x => ({ ...x, u: users.find(u => u.id === x.uid) }))
+        .filter(x => x.u && !x.u.banned).sort((a, b) => (high ? b.score - a.score : a.score - b.score) || a.at - b.at)
+        .slice(0, limit).map(x => ({ uid: x.uid, score: x.score, nickname: x.u.nickname }));
+    },
+    async scoreRank(game, week, score, high) { return mv.scores.filter(x => x.game === game && x.week === week && (high ? x.score > score : x.score < score)).length + 1; },
+    async myScore(game, week, uid) { const r = mv.scores.find(x => x.game === game && x.week === week && x.uid === uid); return r ? r.score : null; },
     async setSetting(key, value) { settings[key] = value; },
     async delSetting(key) { delete settings[key]; },
     async adminUsers() { return users.map(u => ({ id: u.id, username: u.username, nickname: u.nickname, rank: u.rank, floor: u.floor, money: u.money, banned: u.banned, created_at: u.created_at || 0 })); },

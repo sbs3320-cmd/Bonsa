@@ -6,6 +6,7 @@ const config = require('./config');
 const weather = require('./weather');
 const db = require('./db');
 const auth = require('./auth');
+const { Villages } = require('./village');
 
 const TICK_MS = 100;            // 위치 방송 주기 (초당 10번)
 const MAX_MOVES_PER_SEC = 30;
@@ -33,6 +34,8 @@ class Game {
       this.floors.set(n, { name: '', count: 0, hash: null, rep: 0, repName: '' });
       this.furn.set(n, []);
     }
+    for (const a of World.allAreas()) if (!this.rooms[a]) this.rooms[a] = new Set();   // 삼산·성남 마을, 나무 회사, 플레이존
+    this.vil = new Villages(this);
     this.postLimit = auth.limiter(3, 60 * 1000);        // 글쓰기: 1분에 3개까지
     this.lockFail = auth.limiter(5, 10 * 60 * 1000);
     // 총관리자가 바꿀 수 있는 설정 (값표, 안내원 대사, 공지, 가입 받기). DB의 settings 에 저장된다.
@@ -68,6 +71,7 @@ class Game {
     (await db.loadFurniture()).forEach(x => { if (this.furn.has(x.floor) && World.FURN[x.type]) this.furn.get(x.floor).push(x); });
     for (const n of this.furn.keys()) this.rebuildCol(n);
     (await db.listPinned()).forEach(x => { if (!this.pins.has(x.board)) this.pins.set(x.board, []); this.pins.get(x.board).push(x); });
+    await this.vil.init();
   }
   floorList() {
     const list = [];
@@ -138,6 +142,7 @@ class Game {
   remove(p) {
     if (this.players.get(p.id) !== p) return;
     this.players.delete(p.id);
+    this.vil.onLeave(p);
     this.rooms[p.area].delete(p);
     this.broadcast(p.area, { t: 'leave', id: p.id });
   }
@@ -146,6 +151,7 @@ class Game {
     let m;
     try { m = JSON.parse(raw); } catch (e) { return; }
     if (!m || typeof m !== 'object') return;
+    if (m.t !== 'move' && this.vil.handle(p, m)) return;
     if (m.t === 'move') this.onMove(p, m);
     else if (m.t === 'chat') this.onChat(p, m);
     else if (m.t === 'mega') this.onMegaphone(p, m).catch(e => console.error('확성기 오류:', e.message));
@@ -259,10 +265,13 @@ class Game {
   onArea(p, m) {
     const to = World.door(p.area, p.x, p.z, 0.8);
     if (!to || m.to !== to) { this.send(p.ws, { t: 'fix', x: p.x, z: p.z }); return; }
-    this.moveTo(p, to, World.SPAWN[to].x, World.SPAWN[to].z, to === 'in' ? Math.PI : 0);
+    const s = World.spawnOf(p.area, to);
+    this.moveTo(p, to, s.x, s.z, s.f);
   }
 
   moveTo(p, to, x, z, f) {
+    if (!this.rooms[to]) return;
+    this.vil.onLeave(p);
     this.rooms[p.area].delete(p);
     this.broadcast(p.area, { t: 'leave', id: p.id });
     p.area = to; p.x = x; p.z = z; p.f = f; p.sit = null; p.sitFrom = null;
@@ -271,6 +280,7 @@ class Game {
     this.send(p.ws, { t: 'area', area: to, x: p.x, z: p.z, f: p.f, players: this.roster(to, p), pins: this.areaPins(to),
       furn: this.furnList(to) });
     this.broadcast(to, { t: 'join', p: this.pub(p) }, p);
+    this.vil.onEnter(p, to).catch(e => console.error('장소 정보 오류:', e.message));
   }
 
   // 엘리베이터: 층 사이를 오가는 유일한 방법. 엘리베이터 앞에 서 있는지 서버가 확인한다.
@@ -297,7 +307,7 @@ class Game {
   // 크리스마스 소품은 꾸미기가 켜져 있을 때만 길을 막는다
   themeCols() {
     const on = this.live.theme === 'christmas';
-    this.furnCol.out = on ? World.XMAS_OUT : [];
+    this.furnCol.out = this.furnCol.o_sa = this.furnCol.o_sn = on ? World.XMAS_OUT : [];   // 트리·썰매는 세 마을에 똑같이 있다
     this.furnCol.in = on ? World.XMAS_IN : [];
   }
   // 설정을 검사해서 적용한다. 값표는 서버가 가진 가구·치장 표에 바로 반영된다.

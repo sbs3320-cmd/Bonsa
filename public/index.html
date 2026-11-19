@@ -173,6 +173,38 @@
   #shSel { flex: 1; font-size: 14px; color: #1c2430; line-height: 1.3; }
   #shAct { min-height: 44px; padding: 0 18px; }
   #shAct:disabled, #fiRepSet:disabled { opacity: .45; }
+  /* 마을: 열매·기록·명부·기도·랭킹 */
+  .vin { width: 100%; border: 1.5px solid #cfd6e1; border-radius: 10px; padding: 10px 12px; font-size: 16px; font-family: inherit;
+    color: #1c2430; resize: none; display: block; min-height: 46px; -webkit-user-select: text; user-select: text; }
+  .llist { max-height: 52vh; overflow-y: auto; touch-action: pan-y; }
+  .lrow { display: flex; justify-content: space-between; gap: 10px; padding: 9px 2px; border-top: 1px solid #eef1f5; font-size: 14px; color: #1c2430; }
+  .lrow b { font-weight: 700; word-break: break-all; }
+  .lrow span { flex: none; color: #5b6676; font-size: 13px; }
+  #rankList .small { font-size: 12px; color: #7a8494; margin-top: 6px; }
+  #prayBtn, #musicBtn { position: fixed; display: none; border: 0; border-radius: 22px; font-family: inherit; font-weight: 700; z-index: 5; }
+  #prayBtn { right: 22px; bottom: 122px; min-height: 48px; padding: 0 18px; background: #c9a227; color: #fff; font-size: 16px; box-shadow: 0 4px 12px rgba(0,0,0,.3); }
+  #musicBtn { left: 50%; transform: translateX(-50%); top: 58px; min-height: 36px; padding: 0 14px; background: rgba(20,28,40,.78); color: #fff; font-size: 13px; }
+  /* 게임 화면 */
+  #gameUi { position: fixed; inset: 0; background: linear-gradient(#2a1b55, #140d2e); display: none; flex-direction: column; z-index: 25;
+    padding: calc(12px + env(safe-area-inset-top)) 14px calc(14px + env(safe-area-inset-bottom)); color: #fff; touch-action: manipulation; }
+  .gHead { display: flex; align-items: center; gap: 10px; }
+  .gHead b { font-size: 20px; }
+  .gHead span { flex: 1; font-size: 14px; color: #ffd23f; text-align: right; }
+  .gHead .btn { min-height: 38px; padding: 0 14px; }
+  #gBody { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; overflow: hidden; }
+  .gNote { font-size: 15px; color: rgba(255,255,255,.8); text-align: center; line-height: 1.5; max-width: 420px; }
+  .gHuge { font-size: 44px; font-weight: 700; letter-spacing: 2px; text-align: center; word-break: break-all; max-width: 92vw; }
+  .gHuge.mono { font-variant-numeric: tabular-nums; letter-spacing: 6px; }
+  .gBig { min-width: 160px; min-height: 54px; font-size: 18px; }
+  .gOk { color: #7cff6b; font-weight: 700; } .gNo { color: #ff7a7a; font-weight: 700; }
+  .gPad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; width: min(320px, 88vw); }
+  .gPad button { min-height: 58px; border: 0; border-radius: 12px; background: rgba(255,255,255,.14); color: #fff; font-family: inherit; font-size: 22px; font-weight: 700; }
+  .gPad button.ok { background: #ff5fa2; font-size: 18px; }
+  .gPad button:active { background: rgba(255,255,255,.3); }
+  .gGrid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; width: min(400px, 92vw); }
+  .gGrid button { aspect-ratio: 1; border: 0; border-radius: 10px; background: #4fd1ff; color: #0b0820; font-family: inherit; font-size: 22px; font-weight: 700; }
+  .gGrid button.done { background: rgba(255,255,255,.12); color: rgba(255,255,255,.35); }
+  .gGrid button.miss { background: #ff7a7a; }
   #decoBar { position: fixed; left: 8px; right: 8px; bottom: 8px; background: rgba(255,255,255,.96); border-radius: 16px;
     padding: 10px; display: none; box-shadow: 0 6px 24px rgba(0,0,0,.35); }
   #decoInfo { font-size: 13px; color: #333c4a; margin-bottom: 8px; line-height: 1.4; }
@@ -353,11 +385,66 @@
   </div>
 </div>
 
+<div id="fruitM" class="modal">
+  <div class="card">
+    <h2>🍎 열매 맺기</h2>
+    <div class="note">나무에 적을 이름을 넣으세요. 아무 이름이나 괜찮아요. 나무에는 최근 20개 열매만 달리고, 기록은 모두 남습니다.</div>
+    <input id="fruitName" maxlength="10" autocomplete="off" class="vin">
+    <div class="row" style="justify-content:flex-end"><button class="btn ghost" type="button" data-close="1">닫기</button><button class="btn" id="fruitGo" type="button">열매 맺기</button></div>
+  </div>
+</div>
+<div id="fruitLogM" class="modal">
+  <div class="card">
+    <h2>열매 기록</h2>
+    <div class="note" id="fruitLogNote"></div>
+    <div id="fruitLogList" class="llist"></div>
+    <div class="row" style="justify-content:space-between"><button class="btn ghost" id="fruitMore" type="button">더 보기</button><button class="btn ghost" type="button" data-close="1">닫기</button></div>
+  </div>
+</div>
+<div id="entryM" class="modal">
+  <div class="card">
+    <h2>출입명부</h2>
+    <div class="note" id="entryNote"></div>
+    <div id="entryList" class="llist"></div>
+    <div style="text-align:right;margin-top:10px"><button class="btn ghost" type="button" data-close="1">닫기</button></div>
+  </div>
+</div>
+<div id="prayM" class="modal">
+  <div class="card">
+    <h2>글 쓰기</h2>
+    <div class="note">쓴 글은 앞쪽 큰 화면에 이름과 함께 올라갑니다.</div>
+    <textarea id="prayText" maxlength="100" rows="3" class="vin" placeholder="마음을 담아 적어 주세요 (100자까지)"></textarea>
+    <div class="row" style="align-items:center"><span id="prayCount" style="flex:1;font-size:13px;color:#5b6676">0 / 100</span><button class="btn ghost" type="button" data-close="1">닫기</button><button class="btn" id="prayGo" type="button">화면에 올리기</button></div>
+  </div>
+</div>
+<div id="rankM" class="modal">
+  <div class="card">
+    <h2>🏆 플레이존 랭킹</h2>
+    <div class="note" id="rankNote"></div>
+    <div id="rankList"></div>
+    <div style="text-align:right;margin-top:10px"><button class="btn ghost" type="button" data-close="1">닫기</button></div>
+  </div>
+</div>
+<div id="gameUi">
+  <div class="gHead"><b id="gTitle"></b><span id="gInfo"></span><button class="btn ghost" id="gClose" type="button">그만하기</button></div>
+  <div id="gBody"></div>
+</div>
+<button id="prayBtn" type="button">✏️ 글 쓰기</button>
+<button id="musicBtn" type="button">♪ 음악 끄기</button>
+
 <div id="elev" class="modal">
   <div class="card">
     <h2>엘리베이터</h2>
-    <div class="note">가고 싶은 층을 누르세요.</div>
-    <div id="floorList" class="list"></div>
+    <div id="villRow" style="margin-bottom:12px">
+      <b>마을 이동</b>
+      <div class="note" style="margin:2px 0 8px">무거마을(본사)은 본사 1층 로비로, 삼산·성남마을은 마을 엘리베이터로 내립니다.</div>
+      <div id="villList" class="list"></div>
+    </div>
+    <div id="floorBox">
+      <div class="note">가고 싶은 층을 누르세요.</div>
+      <div id="floorList" class="list"></div>
+    </div>
+
     <form id="pwRow" class="sec" style="display:none" autocomplete="off">
       <b>12층 사장실은 비밀번호가 걸려 있습니다</b>
       <div class="row">

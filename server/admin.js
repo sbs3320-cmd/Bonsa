@@ -209,6 +209,37 @@ const OPS = {
     game.eventsChanged();
     return {};
   },
+  // 마을: 출입명부, 2층 글, 열매, 이번 주 랭킹과 보상 코인
+  async village(game) {
+    const W = World, place = a => a === 'in' ? '본사' : (W.VILLAGES[W.villageOf(a)] || {}).n + ' ' + ({ nm1: '나무 1층', nm2: '나무 2층', pz: '플레이존' })[W.kindOf(a)];
+    const ms = d => +new Date(d);
+    const entries = (await db.listVisits(null, 200)).map(e => [e.nickname, place(e.place), ms(e.created_at)]);
+    const prayers = (await db.listPrayersAdmin(100)).map(x => [x.id, W.VILLAGES[x.village].n, x.nickname, x.body, ms(x.created_at), x.hidden ? 1 : 0]);
+    const fruits = [];
+    for (const v of W.VKEYS) { const r = await db.listFruits(v, 30, 0); fruits.push([W.VILLAGES[v].n, r.total, r.rows.map(f => [f.id, f.name, f.by || '', ms(f.created_at)])]); }
+    const ranks = await game.vil.ranksData(0);
+    return { entries, prayers, fruits, ranks, games: Object.keys(W.GAMES).map(k => [k, W.GAMES[k].n, W.GAMES[k].unit]) };
+  },
+  async 'prayer.hide'(game, b, actor) {
+    const id = int(b.id), v = Number.isInteger(id) ? await db.hidePrayer(id, b.hidden !== false) : null;
+    if (!v) throw new Error('글을 찾지 못했습니다.');
+    await db.audit(actor, 'admin_prayer', '나무 2층 글 ' + id + (b.hidden !== false ? ' 숨김' : ' 다시 보임'));
+    await game.vil.refreshPrayers(v);
+    return {};
+  },
+  async 'fruit.del'(game, b, actor) {
+    const id = int(b.id), v = Number.isInteger(id) ? await db.deleteFruit(id) : null;
+    if (!v) throw new Error('열매를 찾지 못했습니다.');
+    await db.audit(actor, 'admin_fruit', '열매 ' + id + ' 삭제');
+    await game.vil.refreshFruits(v);
+    return {};
+  },
+  async 'prize.set'(game, b, actor) {
+    await game.vil.setPrize(b.prize);
+    await db.audit(actor, 'admin_prize', '주간 랭킹 보상 ' + game.vil.prize.join('/'));
+    game.vil.pushRanks();
+    return {};
+  },
   async shop(game) {
     const SLOT_KO = { color: '털 색', hat: '모자', jacket: '자켓', pants: '바지', tie: '넥타이' };
     const row = (k, it, kind) => [k, kind, it.n, it.price, game.basePrices[k]];
