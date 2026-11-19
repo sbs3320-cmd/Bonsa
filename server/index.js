@@ -91,7 +91,7 @@ async function signup(req, res, ip) {
   if (r.error === 'full') return json(res, 403, { ok: false, error: '가입 정원(' + config.maxUsers + '명)이 모두 찼습니다. 더 이상 가입할 수 없습니다.' });
   if (r.error === 'username') return json(res, 409, { ok: false, error: owner ? '이미 사용 중인 닉네임입니다.' : '잠시 후 다시 시도해 주세요.' });
   if (r.error === 'nickname') return json(res, 409, { ok: false, error: '이미 사용 중인 닉네임입니다.' });
-  json(res, 200, { ok: true, token: auth.signToken(r.id) });
+  json(res, 200, { ok: true, token: auth.signToken(r.id, 0, b.remember === true) });
 }
 
 async function login(req, res, ip) {
@@ -112,16 +112,16 @@ async function login(req, res, ip) {
   }
   if (user.banned) return json(res, 403, { ok: false, error: '이용이 정지된 계정입니다.' });
   loginFailUser.clear(key);
-  json(res, 200, { ok: true, token: auth.signToken(user.id) });
+  json(res, 200, { ok: true, token: auth.signToken(user.id, Number(user.token_ver) || 0, b.remember === true) });
 }
 
 // 비밀번호 변경: 로그인 토큰 + 지금 비밀번호를 둘 다 확인한다 (토큰만 훔쳐서는 바꿀 수 없게)
 async function changePassword(req, res, ip) {
   const b = await readBody(req);
-  const uid = auth.verifyToken(b.token);
+  const tk = auth.readToken(b.token), uid = tk ? tk.u : null;
   const oldPw = typeof b.old === 'string' ? b.old.slice(0, 72) : '', newPw = typeof b.next === 'string' ? b.next : '';
   const user = uid ? await db.findById(uid) : null;
-  if (!user || user.banned) return json(res, 401, { ok: false, error: '다시 로그인해 주세요.' });
+  if (!user || user.banned || !auth.tokenOk(tk, user)) return json(res, 401, { ok: false, error: '다시 로그인해 주세요.' });
   if (loginFailUser.over('id:' + user.id) || loginFailIp.over(ip)) return json(res, 429, { ok: false, error: '여러 번 틀렸습니다. 10분 뒤에 다시 시도해 주세요.' });
   if (newPw.length < World.PASS_MIN || newPw.length > 72) return json(res, 400, { ok: false, error: '새 비밀번호는 ' + World.PASS_MIN + '자 이상이어야 합니다.' });
   if (!(await auth.checkPassword(oldPw, user.pass_hash))) {
@@ -129,9 +129,9 @@ async function changePassword(req, res, ip) {
     return json(res, 401, { ok: false, error: '지금 비밀번호가 맞지 않습니다.' });
   }
   if (newPw === oldPw) return json(res, 400, { ok: false, error: '지금과 다른 비밀번호를 넣어 주세요.' });
-  await db.setPassword(user.id, await auth.hashPassword(newPw));
-  await db.audit(user.id, 'password', '비밀번호 변경');
-  json(res, 200, { ok: true });
+  const ver = await db.setPassword(user.id, await auth.hashPassword(newPw));
+  await db.audit(user.id, 'password', '비밀번호 변경 (다른 기기 자동 로그인 해제)');
+  json(res, 200, { ok: true, token: auth.signToken(user.id, ver, tk.r) });      // 지금 기기는 새 토큰으로 계속
 }
 
 const server = http.createServer((req, res) => {
@@ -217,14 +217,16 @@ wss.on('connection', ws => {
     authing = true;
     try {
       const m = JSON.parse(raw);
-      const uid = m && m.t === 'auth' ? auth.verifyToken(m.token) : null;
-      const user = uid ? await db.findById(uid) : null;
-      if (!user || user.banned) {
+      const tk = m && m.t === 'auth' ? auth.readToken(m.token) : null;
+      const user = tk ? await db.findById(tk.u) : null;
+      if (!user || user.banned || !auth.tokenOk(tk, user)) {
         ws.send(JSON.stringify({ t: 'authfail', m: '다시 로그인해 주세요.' }));
         return ws.close(4004);
       }
       if (ws.readyState !== 1) return;
       player = game.add(ws, user);
+      // 자동 로그인: 접속할 때마다 30일짜리 새 토큰으로 바꿔 준다 (계속 쓰면 로그인이 풀리지 않는다)
+      if (tk.r) ws.send(JSON.stringify({ t: 'token', token: auth.signToken(user.id, Number(user.token_ver) || 0, true) }));
     } catch (e) { ws.close(4004); }
   });
   ws.on('close', () => { clearTimeout(authTimer); if (player) game.remove(player); });

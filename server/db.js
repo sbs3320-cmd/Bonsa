@@ -171,7 +171,8 @@ function pgStore() {
     async moveFurniture(id, x, z, rot) { await pool.query('UPDATE furniture SET x = $2, z = $3, rot = $4 WHERE id = $1', [id, x, z, rot]); },
     // 치우기: 지워진 줄이 있을 때만 true (두 사람이 동시에 치워도 환불은 한 번만 나가게)
     async deleteFurniture(id) { return (await pool.query('DELETE FROM furniture WHERE id = $1', [id])).rowCount === 1; },
-    async setPassword(uid, hash) { await pool.query('UPDATE users SET pass_hash = $2 WHERE id = $1', [uid, hash]); },
+    // 비밀번호를 바꾸면 토큰 세대를 올려 다른 기기의 자동 로그인을 모두 끊는다
+    async setPassword(uid, hash) { const r = await pool.query('UPDATE users SET pass_hash = $2, token_ver = token_ver + 1 WHERE id = $1 RETURNING token_ver', [uid, hash]); return r.rows.length ? r.rows[0].token_ver : 0; },
     // ---- 총관리자 화면용 ----
     async getSetting(key) { const r = await pool.query('SELECT value FROM settings WHERE key = $1', [key]); return r.rows.length ? r.rows[0].value : null; },
     async setSetting(key, value) { await pool.query('INSERT INTO settings (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = $2', [key, value]); },
@@ -368,7 +369,7 @@ function memoryStore() {
     async addFurniture(floor, type, x, z, rot, owner, paid) { furn.push({ id: ++furnSeq, floor, type, x, z, rot, owner, paid }); return furnSeq; },
     async moveFurniture(id, x, z, rot) { const f = furn.find(y => y.id === id); if (f) { f.x = x; f.z = z; f.rot = rot; } },
     async deleteFurniture(id) { const i = furn.findIndex(y => y.id === id); if (i < 0) return false; furn.splice(i, 1); return true; },
-    async setPassword(uid, hash) { const u = users.find(x => x.id === uid); if (u) u.pass_hash = hash; },
+    async setPassword(uid, hash) { const u = users.find(x => x.id === uid); if (!u) return 0; u.pass_hash = hash; u.token_ver = (u.token_ver || 0) + 1; return u.token_ver; },
     async getSetting(key) { return Object.prototype.hasOwnProperty.call(settings, key) ? settings[key] : null; },
     async setSetting(key, value) { settings[key] = value; },
     async delSetting(key) { delete settings[key]; },

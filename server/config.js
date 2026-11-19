@@ -18,6 +18,7 @@ module.exports = {
   databaseUrl: process.env.DATABASE_URL || '',
   sessionSecret: secret,
   sessionTtlMs: 24 * 60 * 60 * 1000,
+  rememberTtlMs: 30 * 24 * 60 * 60 * 1000,      // 자동 로그인: 30일, 접속할 때마다 다시 30일로 늘어난다
   maxUsers: Number(process.env.MAX_USERS) || 200,
   maxOnline: Number(process.env.MAX_ONLINE) || 100,
   // 횟수 제한. 같은 사무실·학교처럼 여러 사람이 한 IP를 같이 쓰는 경우를 생각해 넉넉히 잡고, 전체 합계 제한을 따로 둔다.

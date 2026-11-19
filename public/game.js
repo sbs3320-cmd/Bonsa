@@ -1886,7 +1886,11 @@ function bonsaBoot() {
     if (n !== $('pwNew2').value) { toast('새 비밀번호 두 칸이 서로 다릅니다.'); return; }
     fetch('/api/password', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: token, old: o, next: n }) })
       .then(function (r) { return r.json(); })
-      .then(function (r) { if (r.ok) { closePass(); toast('비밀번호를 바꿨습니다.'); } else toast(r.error || '바꾸지 못했습니다.'); })
+      .then(function (r) {
+        if (!r.ok) return toast(r.error || '바꾸지 못했습니다.');
+        if (r.token) keepToken(r.token);
+        closePass(); toast('비밀번호를 바꿨습니다. 다른 기기의 자동 로그인은 풀렸습니다.');
+      })
       .catch(function () { toast('서버에 연결하지 못했습니다.'); });
   });
   $('mnLogout').addEventListener('click', function () {
@@ -2506,8 +2510,17 @@ function bonsaBoot() {
   document.addEventListener('visibilitychange', function () { if (document.hidden) bgmStop(); else if (playing) bgmStart(); });
 
   /* ---------- 로그인과 회원가입 ---------- */
-  var mode = 'login', token = null;
+  // 자동 로그인을 켜면 토큰을 기기에 저장하고(30일, 접속할 때마다 연장), 끄면 앱·탭을 닫을 때까지만 기억한다
+  var mode = 'login', token = null, remember = true;
   try { token = localStorage.getItem('bonsa_token'); } catch (e) {}
+  if (!token) { try { token = sessionStorage.getItem('bonsa_token'); if (token) remember = false; } catch (e) {} }
+  function keepToken(t) {
+    token = t;
+    try {
+      if (remember) { localStorage.setItem('bonsa_token', t); sessionStorage.removeItem('bonsa_token'); }
+      else { sessionStorage.setItem('bonsa_token', t); localStorage.removeItem('bonsa_token'); }
+    } catch (e) {}
+  }
   function setMode(m) {
     mode = m;
     $('tabLogin').className = m === 'login' ? 'on' : '';
@@ -2527,15 +2540,15 @@ function bonsaBoot() {
   }
   $('authForm').addEventListener('submit', function (e) {
     e.preventDefault();
-    var body = { nickname: $('fNick').value.trim(), password: $('fPass').value };
+    remember = $('fRemember').checked;
+    var body = { nickname: $('fNick').value.trim(), password: $('fPass').value, remember: remember };
     $('authGo').disabled = true; $('authMsg').textContent = '';
     fetch(mode === 'join' ? '/api/signup' : '/api/login', {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
     }).then(function (r) { return r.json(); }).then(function (j) {
       $('authGo').disabled = false;
       if (!j.ok) { $('authMsg').textContent = j.error || '실패했습니다.'; return; }
-      token = j.token;
-      try { localStorage.setItem('bonsa_token', token); } catch (err) {}
+      keepToken(j.token);
       $('fPass').value = '';
       bgmStart();
       connect();
@@ -2547,7 +2560,7 @@ function bonsaBoot() {
   /* ---------- 실시간 연결 (끊기면 자동 재접속) ---------- */
   var ws = null, myId = null, retry = 0, stopped = false, retryTimer = 0;
   function sendMsg(o) { if (ws && ws.readyState === 1) ws.send(JSON.stringify(o)); }
-  function forget() { token = null; try { localStorage.removeItem('bonsa_token'); } catch (e) {} }
+  function forget() { token = null; try { localStorage.removeItem('bonsa_token'); sessionStorage.removeItem('bonsa_token'); } catch (e) {} }
   function connect() {
     if (!token) return showAuth();
     stopped = false;
@@ -2652,6 +2665,7 @@ function bonsaBoot() {
       case 'kick': stopped = true; setOthers([]); showAuth(m.m); break;
       case 'full': stopped = true; showAuth(m.m); break;
       case 'authfail': stopped = true; forget(); showAuth(m.m); break;
+      case 'token': if (typeof m.token === 'string' && remember) keepToken(m.token); break;
     }
   }
 
