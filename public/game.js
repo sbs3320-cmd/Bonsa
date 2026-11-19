@@ -1926,7 +1926,15 @@ function bonsaBoot() {
   var player = makeCharacter(BODY_COLORS[0], '[인턴] …');
   scene.add(player);
   var P = { x: 0, z: 24, face: Math.PI, walk: 0 };
-  var cam = { yaw: 0, pitch: 0.42 };
+  var cam = { yaw: 0, pitch: 0.42, zoom: 1.3 };
+  // 시점 거리 배율: 0.7(가까이) ~ 2.2(멀리). 기기에 기억해 둔다.
+  try { var zs = parseFloat(localStorage.getItem('bonsa_zoom')); if (zs >= 0.7 && zs <= 2.2) cam.zoom = zs; } catch (err) {}
+  var zoomSaveT = 0;
+  function setZoom(z) {
+    cam.zoom = Math.max(0.7, Math.min(2.2, z));
+    clearTimeout(zoomSaveT);
+    zoomSaveT = setTimeout(function () { try { localStorage.setItem('bonsa_zoom', cam.zoom.toFixed(2)); } catch (err) {} }, 400);
+  }
   var area = 'out';
   var lockUntil = 0, uiOpen = false, playing = false;
 
@@ -3608,7 +3616,29 @@ function bonsaBoot() {
     look.id = e.pointerId; look.x = e.clientX; look.y = e.clientY;
     try { canvas.setPointerCapture(e.pointerId); } catch (err) {}
   });
+  // 두 손가락 벌리기·오므리기 = 확대·축소, PC는 마우스 휠
+  var pinch = { pts: {}, d: 0 };
+  function pinchDist() { var k = Object.keys(pinch.pts); if (k.length < 2) return 0; var a = pinch.pts[k[0]], b = pinch.pts[k[1]]; return Math.hypot(a.x - b.x, a.y - b.y); }
+  canvas.addEventListener('pointerdown', function (e) {
+    if (e.pointerType !== 'touch' || e.pointerId === joy.id) return;
+    pinch.pts[e.pointerId] = { x: e.clientX, y: e.clientY };
+    if (Object.keys(pinch.pts).length === 2) { pinch.d = pinchDist(); look.id = null; }
+  });
+  function pinchEnd(e) { delete pinch.pts[e.pointerId]; if (Object.keys(pinch.pts).length < 2) pinch.d = 0; }
+  canvas.addEventListener('pointerup', pinchEnd);
+  canvas.addEventListener('pointercancel', pinchEnd);
+  canvas.addEventListener('wheel', function (e) {
+    if (!playing || uiOpen) return;
+    e.preventDefault();
+    setZoom(cam.zoom * Math.exp(Math.max(-60, Math.min(60, e.deltaY)) * 0.004));
+  }, { passive: false });
+  $('zoomIn').addEventListener('click', function () { setZoom(cam.zoom / 1.2); });
+  $('zoomOut').addEventListener('click', function () { setZoom(cam.zoom * 1.2); });
   canvas.addEventListener('pointermove', function (e) {
+    if (pinch.pts[e.pointerId]) {
+      pinch.pts[e.pointerId].x = e.clientX; pinch.pts[e.pointerId].y = e.clientY;
+      if (pinch.d > 0) { var nd = pinchDist(); if (nd > 10) { setZoom(cam.zoom * pinch.d / nd); pinch.d = nd; } return; }
+    }
     if (joy.id !== null && e.pointerId === joy.id) { joyMove(e); return; }
     if (e.pointerId !== look.id) return;
     cam.yaw -= (e.clientX - look.x) * 0.007;
@@ -3637,7 +3667,7 @@ function bonsaBoot() {
   function expireBubble(g, now) {
     if (g.userData.bubble && now > g.userData.bubbleUntil) { dropSprite(g.userData.bubble); g.userData.bubble = null; }
   }
-  var fpsT = 0, fpsN = 0, fpsWarm = 0;
+  var fpsT = 0, fpsN = 0, fpsWarm = 0, zoomShown = '';
   var last = performance.now(), lastSend = 0, sent = { x: 0, z: 0, f: 0 };
   function frame(now) {
     requestAnimationFrame(frame);
@@ -3770,14 +3800,17 @@ function bonsaBoot() {
       return;
     }
     // 3인칭 카메라
-    var inShop = shopOpen(), dist = inShop ? 5.2 : !W.isOut(area) ? 5.6 : 8, pitch = inShop ? 0.1 : cam.pitch;
+    var inShop = shopOpen(), dist = inShop ? 5.2 : (!W.isOut(area) ? 5.6 : 8) * cam.zoom, pitch = inShop ? 0.1 : cam.pitch;
     var h = Math.cos(pitch) * dist;
     var cx = P.x + Math.sin(cam.yaw) * h, cz = P.z + Math.cos(cam.yaw) * h;
     var cyy = 1.3 + Math.sin(pitch) * dist;
     if (!W.isOut(area)) {
+      // 벽에 막히면 그 벽 앞까지 당기고, 높이는 당긴 만큼 낮추되 예전 기본 높이 아래로는 내리지 않는다 (머리 위로 꺾이지 않게)
+      var h0 = Math.hypot(cx - P.x, cz - P.z) || 1;
       cx = Math.max(-LW / 2 + 0.4, Math.min(LW / 2 - 0.4, cx));
       cz = Math.max(-LD / 2 + 0.4, Math.min(LD / 2 - 0.4, cz));
-      cyy = Math.min(LH - 0.4, cyy);
+      var hr = Math.hypot(cx - P.x, cz - P.z) / h0;
+      cyy = Math.min(LH - 0.4, 1.3 + Math.max((cyy - 1.3) * hr, Math.sin(pitch) * 5.6));
     } else {
       if (area === 'out' && cx > -8.6 && cx < 8.6 && cz > -6.6 && cz < 6.6) {
         // 카메라가 건물 안으로 파고들지 않게 가장 가까운 벽 밖으로 밀어낸다
@@ -3791,6 +3824,8 @@ function bonsaBoot() {
       camPull = want < camPull ? want : camPull + (want - camPull) * Math.min(1, dt * 2.5);
       cx = P.x + (cx - P.x) * camPull; cyy = 1.3 + (cyy - 1.3) * camPull; cz = P.z + (cz - P.z) * camPull;
     }
+    var zb = playing && !uiOpen && !inShop ? 'flex' : 'none';
+    if (zoomShown !== zb) { zoomShown = zb; $('zoomBox').style.display = zb; }
     camera.position.set(cx, cyy, cz);
     camera.lookAt(P.x, inShop ? -0.34 : 1.3, P.z);
     if (player.userData.tag) player.userData.tag.visible = !inShop;
