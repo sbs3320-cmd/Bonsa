@@ -27,6 +27,18 @@ function pgStore() {
         throw e;
       }
     },
+    // 로그인 이름(닉네임)으로 찾기: 똑같은 닉네임 → 대소문자만 다른 닉네임(하나뿐일 때) → 예전 아이디 순서
+    async findByLogin(name) {
+      let r = await pool.query('SELECT * FROM users WHERE nickname = $1', [name]);
+      if (r.rows.length) return r.rows[0];
+      r = await pool.query('SELECT * FROM users WHERE lower(nickname) = lower($1) LIMIT 2', [name]);
+      if (r.rows.length === 1) return r.rows[0];
+      r = await pool.query('SELECT * FROM users WHERE username = $1', [name.toLowerCase()]);
+      return r.rows[0] || null;
+    },
+    async nicknameTaken(nickname) {
+      return (await pool.query('SELECT 1 FROM users WHERE lower(nickname) = lower($1) OR username = lower($1) LIMIT 1', [nickname])).rows.length > 0;
+    },
     async findByUsername(username) {
       const r = await pool.query('SELECT * FROM users WHERE username = $1', [username]);
       return r.rows[0] || null;
@@ -293,6 +305,12 @@ function memoryStore() {
       return { id: u.id };
     },
     async findByUsername(username) { return users.find(u => u.username === username) || null; },
+    async findByLogin(name) {
+      const ex = users.find(u => u.nickname === name); if (ex) return ex;
+      const ci = users.filter(u => u.nickname.toLowerCase() === name.toLowerCase()); if (ci.length === 1) return ci[0];
+      return users.find(u => u.username === name.toLowerCase()) || null;
+    },
+    async nicknameTaken(nickname) { const l = nickname.toLowerCase(); return users.some(u => u.nickname.toLowerCase() === l || u.username === l); },
     async findById(id) { return users.find(u => u.id === id) || null; },
     async listPosts(board) {
       return posts.filter(x => x.board === board && !x.deleted).sort((x, y) => (y.pinned - x.pinned) || (y.id - x.id)).slice(0, 30).map(x => {

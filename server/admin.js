@@ -76,15 +76,17 @@ function sameOrigin(req) {
 
 async function login(req, res, ip) {
   const b = await readBody(req);
-  const username = typeof b.username === 'string' ? b.username.slice(0, 32).toLowerCase() : '';
+  // 닉네임(또는 예전 아이디)으로 로그인한다. 찾은 계정이 총관리자 계정일 때만 통과한다.
+  const name = typeof b.username === 'string' ? b.username.trim().slice(0, 32) : '';
   const password = typeof b.password === 'string' ? b.password.slice(0, 72) : '';
   if (failIp.over(ip) || failAll.over('all')) return json(res, 429, { ok: false, error: '여러 번 틀렸습니다. 15분 뒤에 다시 시도해 주세요.' });
-  const isAdmin = !!config.superAdmin && username === config.superAdmin;
-  const user = isAdmin ? await db.findByUsername(username) : null;
+  const found = config.superAdmin && name ? await db.findByLogin(name) : null;
+  const user = found && found.username === config.superAdmin ? found : null;
+  const username = config.superAdmin;
   const ok = await auth.checkPassword(password, user ? user.pass_hash : auth.dummyHash);
   if (!user || !ok || user.banned) {
     failIp.hit(ip); failAll.hit('all');
-    return json(res, 401, { ok: false, error: '아이디 또는 비밀번호가 맞지 않습니다.' });
+    return json(res, 401, { ok: false, error: '닉네임 또는 비밀번호가 맞지 않습니다.' });
   }
   const sealed = await db.getSetting('admin_totp');
   if (!sealed) {
@@ -211,7 +213,8 @@ const OPS = {
     const SLOT_KO = { color: '털 색', hat: '모자', jacket: '자켓', pants: '바지', tie: '넥타이' };
     const row = (k, it, kind) => [k, kind, it.n, it.price, game.basePrices[k]];
     return { list: Object.keys(World.FURN).map(k => row(k, World.FURN[k], '가구'))
-      .concat(Object.keys(World.COSM).filter(k => !World.COSM[k].def).map(k => row(k, World.COSM[k], SLOT_KO[World.COSM[k].slot] || '치장'))) };
+      .concat(Object.keys(World.COSM).filter(k => !World.COSM[k].def).map(k => row(k, World.COSM[k], SLOT_KO[World.COSM[k].slot] || '치장')))
+      .concat([row('megaphone', World.MEGA, '확성기')]) };
   },
   async 'shop.price'(game, b, actor) {
     const k = String(b.item), price = int(b.price);

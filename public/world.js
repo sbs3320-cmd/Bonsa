@@ -124,6 +124,9 @@
     t_gold:     { slot: 'tie', n: '금색 넥타이', hex: 0xd4a72c, price: 80 }
   };
   var SUIT_DEF = { jacket: 'j_navy', pants: 'p_charcoal', tie: 't_red' };
+  // 확성기: 모든 접속자 화면 위쪽에 5초 동안 뜬다. 값은 관리자 화면에서 바꿀 수 있다.
+  var MEGA = { n: '확성기 (한 번)', price: 30, len: 60, show: 5000, cooldown: 30000, queue: 10, replay: 60000 };
+  var PASS_MIN = 4;
   var LOOK_SLOTS = ['color', 'hat', 'jacket', 'pants', 'tie'];
   var START_MONEY = 200, EVENT_REWARD_MAX = 1000, EVENT_OPEN_MAX = 10;
   var FURN_CAP = 60;                                   // 층마다 놓을 수 있는 개수 (모바일 성능)
@@ -196,7 +199,7 @@
   return { LW: LW, LD: LD, LH: LH, R: R, SPEED: SPEED, TREES: TREES, SHOPS: SHOPS, SHOP_Z: SHOP_Z,
     PLANTS: PLANTS, NPCS: NPCS, LAMPS: LAMPS, FLAG: FLAG, BENCHES: BENCHES, PLANTERS: PLANTERS, BINS: BINS, XMAS: XMAS, XMAS_OUT: XMAS_OUT, XMAS_IN: XMAS_IN,
     FLOOR_MIN: FLOOR_MIN, FLOOR_MAX: FLOOR_MAX, FLOOR_REG_MAX: FLOOR_REG_MAX, FLOOR_CAP: FLOOR_CAP,
-    COSM: COSM, SUIT_DEF: SUIT_DEF, LOOK_SLOTS: LOOK_SLOTS, START_MONEY: START_MONEY, EVENT_REWARD_MAX: EVENT_REWARD_MAX, EVENT_OPEN_MAX: EVENT_OPEN_MAX,
+    COSM: COSM, MEGA: MEGA, PASS_MIN: PASS_MIN, SUIT_DEF: SUIT_DEF, LOOK_SLOTS: LOOK_SLOTS, START_MONEY: START_MONEY, EVENT_REWARD_MAX: EVENT_REWARD_MAX, EVENT_OPEN_MAX: EVENT_OPEN_MAX,
     FURN: FURN, FURN_CAP: FURN_CAP, furnSize: furnSize, snap: snap, furnRect: furnRect, furnOk: furnOk, seatPos: seatPos,
     ELEV: ELEV, ELEV_OUT: ELEV_OUT, KIOSK: KIOSK, floorOf: floorOf, areaOf: areaOf, nearElev: nearElev, blocked: blocked, door: door, SPAWN: SPAWN };
 });

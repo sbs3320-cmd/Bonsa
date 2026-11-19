@@ -1,5 +1,6 @@
 'use strict';
 const http = require('http');
+const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 const zlib = require('zlib');
@@ -8,6 +9,7 @@ const config = require('./config');
 const db = require('./db');
 const auth = require('./auth');
 const Game = require('./game');
+const World = require('../public/world');
 const weather = require('./weather');
 const admin = require('./admin');
 
@@ -61,38 +63,45 @@ function readBody(req) {
 const RE_USER = /^[a-z0-9_]{4,16}$/;
 const RE_NICK = /^[가-힣a-zA-Z0-9_]{2,10}$/;
 
+// 가입: 닉네임이 곧 로그인 이름이다 (사용자 결정). 내부 계정 이름(username)은 서버가 무작위로 만든다.
+// 단, 닉네임이 총관리자 계정 이름(SUPERADMIN_USERNAME)과 같으면 그 계정 이름을 그대로 쓴다.
+// 그 이름이 이미 있으면 '사용 중'이 되므로, 아무나 총관리자가 될 수는 없다 (예전 아이디 방식과 같은 규칙).
 async function signup(req, res, ip) {
   const b = await readBody(req);
-  const username = typeof b.username === 'string' ? b.username : '';
-  const nickname = typeof b.nickname === 'string' ? b.nickname : '';
+  const nickname = typeof b.nickname === 'string' ? b.nickname.trim() : '';
   const password = typeof b.password === 'string' ? b.password : '';
-  if (!RE_USER.test(username)) return json(res, 400, { ok: false, error: '아이디는 영문 소문자, 숫자, 밑줄로 4~16자여야 합니다.' });
   if (!RE_NICK.test(nickname)) return json(res, 400, { ok: false, error: '닉네임은 한글, 영문, 숫자로 2~10자여야 합니다.' });
-  if (password.length < 8 || password.length > 72) return json(res, 400, { ok: false, error: '비밀번호는 8자 이상이어야 합니다.' });
+  if (password.length < World.PASS_MIN || password.length > 72) return json(res, 400, { ok: false, error: '비밀번호는 ' + World.PASS_MIN + '자 이상이어야 합니다.' });
   if (!game.live.signupOpen) return json(res, 403, { ok: false, error: '지금은 새 가입을 받지 않습니다.' });
   if (!signupLimit.hit(ip) || !signupAll.hit('all')) return json(res, 429, { ok: false, error: '가입 시도가 너무 많습니다. 나중에 다시 시도해 주세요.' });
+  if (await db.nicknameTaken(nickname)) return json(res, 409, { ok: false, error: '이미 사용 중인 닉네임입니다.' });
+  const owner = !!config.superAdmin && nickname.toLowerCase() === config.superAdmin;
+  const username = owner ? config.superAdmin : 'u' + crypto.randomBytes(6).toString('hex');
   const r = await db.createUser(username, nickname, await auth.hashPassword(password), config.maxUsers);
   if (r.error === 'full') return json(res, 403, { ok: false, error: '가입 정원(' + config.maxUsers + '명)이 모두 찼습니다. 더 이상 가입할 수 없습니다.' });
-  if (r.error === 'username') return json(res, 409, { ok: false, error: '이미 사용 중인 아이디입니다.' });
+  if (r.error === 'username') return json(res, 409, { ok: false, error: owner ? '이미 사용 중인 닉네임입니다.' : '잠시 후 다시 시도해 주세요.' });
   if (r.error === 'nickname') return json(res, 409, { ok: false, error: '이미 사용 중인 닉네임입니다.' });
   json(res, 200, { ok: true, token: auth.signToken(r.id) });
 }
 
 async function login(req, res, ip) {
   const b = await readBody(req);
-  const username = typeof b.username === 'string' ? b.username.slice(0, 32) : '';
+  // 닉네임으로 로그인한다. 예전 아이디를 넣어도 찾아 준다. 잠금은 실제 계정 단위로 센다.
+  const name = typeof b.nickname === 'string' ? b.nickname.trim().slice(0, 32) : typeof b.username === 'string' ? b.username.trim().slice(0, 32) : '';
   const password = typeof b.password === 'string' ? b.password.slice(0, 72) : '';
-  if (loginFailUser.over(username) || loginFailIp.over(ip) || loginFailAll.over('all')) {
+  const valid = RE_NICK.test(name) || RE_USER.test(name.toLowerCase());
+  const user = valid ? await db.findByLogin(name) : null;
+  const key = user ? 'id:' + user.id : 'n:' + name.toLowerCase();
+  if (loginFailUser.over(key) || loginFailIp.over(ip) || loginFailAll.over('all')) {
     return json(res, 429, { ok: false, error: '로그인을 여러 번 틀렸습니다. 10분 뒤에 다시 시도해 주세요.' });
   }
-  const user = RE_USER.test(username) ? await db.findByUsername(username) : null;
   const ok = await auth.checkPassword(password, user ? user.pass_hash : auth.dummyHash);
   if (!user || !ok) {
-    loginFailUser.hit(username); loginFailIp.hit(ip); loginFailAll.hit('all');
-    return json(res, 401, { ok: false, error: '아이디 또는 비밀번호가 맞지 않습니다.' });
+    loginFailUser.hit(key); loginFailIp.hit(ip); loginFailAll.hit('all');
+    return json(res, 401, { ok: false, error: '닉네임 또는 비밀번호가 맞지 않습니다.' });
   }
   if (user.banned) return json(res, 403, { ok: false, error: '이용이 정지된 계정입니다.' });
-  loginFailUser.clear(username);
+  loginFailUser.clear(key);
   json(res, 200, { ok: true, token: auth.signToken(user.id) });
 }
 
@@ -103,10 +112,10 @@ async function changePassword(req, res, ip) {
   const oldPw = typeof b.old === 'string' ? b.old.slice(0, 72) : '', newPw = typeof b.next === 'string' ? b.next : '';
   const user = uid ? await db.findById(uid) : null;
   if (!user || user.banned) return json(res, 401, { ok: false, error: '다시 로그인해 주세요.' });
-  if (loginFailUser.over(user.username) || loginFailIp.over(ip)) return json(res, 429, { ok: false, error: '여러 번 틀렸습니다. 10분 뒤에 다시 시도해 주세요.' });
-  if (newPw.length < 8 || newPw.length > 72) return json(res, 400, { ok: false, error: '새 비밀번호는 8자 이상이어야 합니다.' });
+  if (loginFailUser.over('id:' + user.id) || loginFailIp.over(ip)) return json(res, 429, { ok: false, error: '여러 번 틀렸습니다. 10분 뒤에 다시 시도해 주세요.' });
+  if (newPw.length < World.PASS_MIN || newPw.length > 72) return json(res, 400, { ok: false, error: '새 비밀번호는 ' + World.PASS_MIN + '자 이상이어야 합니다.' });
   if (!(await auth.checkPassword(oldPw, user.pass_hash))) {
-    loginFailUser.hit(user.username); loginFailIp.hit(ip);
+    loginFailUser.hit('id:' + user.id); loginFailIp.hit(ip);
     return json(res, 401, { ok: false, error: '지금 비밀번호가 맞지 않습니다.' });
   }
   if (newPw === oldPw) return json(res, 400, { ok: false, error: '지금과 다른 비밀번호를 넣어 주세요.' });

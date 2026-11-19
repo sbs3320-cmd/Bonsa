@@ -1776,6 +1776,53 @@ function bonsaBoot() {
   $('mnDeco').addEventListener('click', function () { closeMenu(); if (typeof openDeco === 'function') openDeco(); });
   $('mnEvents').addEventListener('click', function () { closeMenu(); openEvents(); });
   $('mnShop').addEventListener('click', function () { closeMenu(); openShop(); });
+  $('mnMega').addEventListener('click', function () { closeMenu(); openMega(); });
+  /* ---------- 확성기 ---------- */
+  // 쓰기: 메뉴 → 확성기. 코인을 내면 모든 접속자 화면 위쪽에 5초 동안 뜬다.
+  function megaRefresh() {
+    var n = $('megaText').value.trim().length, price = W.MEGA.price, money = me.money || 0;
+    $('megaCount').textContent = n + ' / ' + W.MEGA.len;
+    $('megaGo').textContent = price ? price + '코인으로 외치기' : '외치기';
+    $('megaGo').disabled = !n || money < price;
+    $('megaNote').textContent = '지금 접속한 모든 사람의 화면 위쪽에 ' + Math.round(W.MEGA.show / 1000) + '초 동안 뜹니다. 방금 들어온 사람에게도 1분 안의 확성기는 보입니다. '
+      + (price ? '한 번에 ' + price + '코인, ' : '') + Math.round(W.MEGA.cooldown / 1000) + '초에 한 번 쓸 수 있습니다. ' + moneyText()
+      + (money < price ? ' (코인이 모자랍니다)' : '');
+  }
+  function openMega() {
+    if (!playing || uiOpen) return;
+    uiOpen = true; $('mega').style.display = 'flex'; megaRefresh();
+    setTimeout(function () { try { $('megaText').focus(); } catch (e) {} }, 50);
+  }
+  function closeMega() { if ($('mega').style.display !== 'flex') return; $('mega').style.display = 'none'; uiOpen = false; }
+  $('megaText').addEventListener('input', megaRefresh);
+  $('megaText').addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); $('megaGo').click(); } });
+  $('megaClose').addEventListener('click', closeMega);
+  $('mega').addEventListener('click', function (e) { if (e.target === $('mega')) closeMega(); });
+  $('megaGo').addEventListener('click', function () {
+    var v = $('megaText').value.replace(/\s+/g, ' ').trim();
+    if (!v) return;
+    sendMsg({ t: 'mega', m: v.slice(0, W.MEGA.len) });
+    $('megaText').value = ''; closeMega();
+  });
+  // 보이기: 서버가 5초 간격으로 보내지만, 들어올 때 다시 받은 것이 겹치면 여기서 줄을 세운다
+  var megaQueue = [], megaTimer = 0;
+  function megaShow() {
+    if (megaTimer || !megaQueue.length) return;
+    var it = megaQueue.shift();
+    $('megaWho').textContent = tagOf(it.r, it.n) + ' :';
+    $('megaMsg').textContent = it.m;
+    $('megaBar').className = 'on';
+    megaTimer = setTimeout(function () {
+      $('megaBar').className = '';
+      megaTimer = setTimeout(function () { megaTimer = 0; megaShow(); }, 300);
+    }, W.MEGA.show);
+  }
+  function megaIn(m) {
+    if (typeof m.m !== 'string' || typeof m.n !== 'string') return;
+    megaQueue.push({ n: m.n, r: m.r, m: m.m.slice(0, W.MEGA.len) });
+    if (megaQueue.length > 5) megaQueue.shift();
+    megaShow();
+  }
   $('mnBgm').addEventListener('click', function () {
     bgm.on = !bgm.on;
     try { localStorage.setItem('bonsa_bgm', bgm.on ? '1' : '0'); } catch (e) {}
@@ -1793,7 +1840,7 @@ function bonsaBoot() {
   $('pwForm').addEventListener('submit', function (e) {
     e.preventDefault();
     var o = $('pwOld').value, n = $('pwNew').value;
-    if (n.length < 8) { toast('새 비밀번호는 8자 이상이어야 합니다.'); return; }
+    if (n.length < W.PASS_MIN) { toast('새 비밀번호는 ' + W.PASS_MIN + '자 이상이어야 합니다.'); return; }
     if (n !== $('pwNew2').value) { toast('새 비밀번호 두 칸이 서로 다릅니다.'); return; }
     fetch('/api/password', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: token, old: o, next: n }) })
       .then(function (r) { return r.json(); })
@@ -2072,6 +2119,7 @@ function bonsaBoot() {
         if (!(v >= 0)) continue;
         if (Object.prototype.hasOwnProperty.call(W.FURN, k)) W.FURN[k].price = v;
         else if (Object.prototype.hasOwnProperty.call(W.COSM, k)) W.COSM[k].price = v;
+        else if (k === 'megaphone') W.MEGA.price = v;
       }
       bs = $('decoTypes').children;
       for (i = 0; i < bs.length; i++) { k = bs[i].getAttribute('data-type'); bs[i].textContent = W.FURN[k].n + ' ' + W.FURN[k].price; }
@@ -2336,7 +2384,7 @@ function bonsaBoot() {
   /* ---------- 채팅 (화면에는 항상 textContent 로만 넣어 스크립트 삽입을 막는다) ---------- */
   function logLine(text, sys) {
     var log = $('chatLog'), d = document.createElement('div');
-    d.textContent = text; if (sys) d.className = 'sys';
+    d.textContent = text; if (sys) d.className = sys === 'mega' ? 'mega' : 'sys';
     log.appendChild(d);
     while (log.children.length > 6) log.removeChild(log.firstChild);
     setTimeout(function () { if (d.parentNode) d.parentNode.removeChild(d); }, 20000);
@@ -2422,7 +2470,10 @@ function bonsaBoot() {
     mode = m;
     $('tabLogin').className = m === 'login' ? 'on' : '';
     $('tabJoin').className = m === 'join' ? 'on' : '';
-    $('nickRow').style.display = m === 'join' ? 'block' : 'none';
+    // 닉네임이 곧 로그인 이름이다. 가입할 때만 글자 규칙을 보여 준다.
+    $('nickLabel').textContent = m === 'join' ? '닉네임 (한글·영문·숫자 2~10자, 로그인할 때 씀)' : '닉네임';
+    $('passLabel').textContent = m === 'join' ? '비밀번호 (' + W.PASS_MIN + '자 이상)' : '비밀번호';
+    $('fNick').maxLength = m === 'join' ? 10 : 16;
     $('authGo').textContent = m === 'join' ? '가입하고 입장' : '로그인';
     $('fPass').autocomplete = m === 'join' ? 'new-password' : 'current-password';
     $('authMsg').textContent = '';
@@ -2434,8 +2485,7 @@ function bonsaBoot() {
   }
   $('authForm').addEventListener('submit', function (e) {
     e.preventDefault();
-    var body = { username: $('fUser').value.trim().toLowerCase(), password: $('fPass').value };
-    if (mode === 'join') body.nickname = $('fNick').value.trim();
+    var body = { nickname: $('fNick').value.trim(), password: $('fPass').value };
     $('authGo').disabled = true; $('authMsg').textContent = '';
     fetch(mode === 'join' ? '/api/signup' : '/api/login', {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
@@ -2508,6 +2558,7 @@ function bonsaBoot() {
           if (o) { o.x = s[1] / 100; o.z = s[2] / 100; o.f = s[3] / 10; }
         });
         break;
+      case 'mega': megaIn(m); break;
       case 'chat':
         logLine(tagOf(m.r, m.n) + ': ' + m.m);
         if (m.id === myId) say(player, m.m);

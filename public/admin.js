@@ -96,7 +96,7 @@
             stamp(u[8]), el('div', { cls: 'row', style: 'margin:0;flex-wrap:nowrap' }, [amt, give]), isOwner ? '' : ban];
         });
         show([card('사용자 (' + r.list.length + '명)', '직급은 고르는 즉시 바뀝니다. 정지하면 바로 접속이 끊기고 로그인할 수 없습니다. 모든 변경은 기록에 남습니다.',
-          [table(['번호', '아이디', '닉네임', '직급', '층', '코인', '상태', '가입', '코인 주기/빼기', ''], rows)])]);
+          [table(['번호', '내부 계정', '닉네임', '직급', '층', '코인', '상태', '가입', '코인 주기/빼기', ''], rows)])]);
       });
     },
     floors: function () {
@@ -179,7 +179,7 @@
         var sel = el('select');
         [['', '전체'], ['rank', '직급 변경'], ['money', '코인 이동'], ['admin_login', '관리자 로그인'], ['admin_rank', '관리자: 직급'], ['admin_money', '관리자: 코인'],
           ['admin_ban', '관리자: 정지'], ['admin_backup', '관리자: 백업'], ['admin_post', '관리자: 게시판'], ['admin_shop', '관리자: 값'], ['admin_config', '관리자: 설정'], ['floor_name', '층 이름'],
-          ['floor12_pass', '12층 비밀번호'], ['floor_rep', '층 대표자'], ['event_new', '이벤트 생성'], ['event_close', '이벤트 종료']].forEach(function (o) {
+          ['floor12_pass', '12층 비밀번호'], ['floor_rep', '층 대표자'], ['megaphone', '확성기'], ['event_new', '이벤트 생성'], ['event_close', '이벤트 종료']].forEach(function (o) {
           var x = el('option', { value: o[0], text: o[1] }); if (o[0] === (filter || '')) x.selected = true; sel.appendChild(x);
         });
         sel.addEventListener('change', function () { VIEWS.logs(sel.value); });

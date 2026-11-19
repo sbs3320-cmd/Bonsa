@@ -203,6 +203,22 @@
   #chatLog div { background: rgba(20,28,40,.6); color: #fff; font-size: 13px; line-height: 1.4;
     padding: 4px 9px; border-radius: 9px; width: fit-content; max-width: 100%; word-break: break-all; }
   #chatLog div.sys { background: rgba(160,60,40,.75); }
+  #chatLog div.mega { background: rgba(214,150,20,.88); }
+  /* 확성기: 화면 위쪽 가운데에 5초 동안 뜨는 노란 띠 */
+  #megaBar { position: fixed; left: 50%; top: 108px; transform: translate(-50%, -14px); width: max-content; max-width: min(92vw, 620px);
+    display: flex; align-items: flex-start; gap: 8px; padding: 9px 14px 10px; border-radius: 14px;
+    background: linear-gradient(#fffbe3, #ffe58c); border: 2.5px solid #d39a24; box-shadow: 0 4px 14px rgba(120,80,0,.35);
+    color: #4a2f05; font-size: 15px; line-height: 1.4; opacity: 0; pointer-events: none; transition: opacity .25s, transform .25s; z-index: 15; }
+  #megaBar.on { opacity: 1; transform: translate(-50%, 0); }
+  #megaBar i { flex: none; font-style: normal; font-size: 12px; font-weight: 700; color: #fff; background: #e0533d;
+    border-radius: 8px; padding: 2px 7px; margin-top: 1px; }
+  #megaBar b { flex: none; font-weight: 700; }
+  #megaBar span { word-break: break-all; }
+  #mega textarea { width: 100%; border: 1.5px solid #cfd6e1; border-radius: 10px; padding: 10px 12px; font-size: 16px;
+    font-family: inherit; color: #1c2430; resize: none; display: block; margin-top: 10px; }
+  #megaFoot { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
+  #megaCount { flex: 1; font-size: 13px; color: #5b6676; }
+  #megaGo:disabled { opacity: .45; }
   #chatBtn { position: fixed; left: 50%; bottom: 30px; transform: translateX(-50%); min-width: 84px;
     min-height: 48px; border: 0; border-radius: 24px; background: rgba(20,28,40,.78); color: #fff;
     font-size: 15px; font-weight: 700; font-family: inherit; }
@@ -226,6 +242,7 @@
   </div>
 </div>
 <div id="chatLog"></div>
+<div id="megaBar"><i>확성기</i><b id="megaWho"></b><span id="megaMsg"></span></div>
 <div id="stick"><div id="knob"></div></div>
 <button id="act" type="button"></button>
 <button id="umbBtn" type="button">우산 쓰기</button>
@@ -287,6 +304,7 @@
       <button type="button" id="mnDeco">꾸미기</button>
       <button type="button" id="mnEvents">이벤트</button>
       <button type="button" id="mnShop">상점</button>
+      <button type="button" id="mnMega">확성기</button>
     </div>
     <div class="sec"><b>설정</b>
       <div class="list" style="margin-top:8px">
@@ -296,6 +314,19 @@
     </div>
     <div class="sec"><div class="list"><button type="button" id="mnPass">비밀번호 변경</button><button type="button" id="mnLogout">로그아웃</button></div></div>
     <div style="text-align:right;margin-top:12px"><button class="btn ghost" id="mnClose" type="button">닫기</button></div>
+  </div>
+</div>
+
+<div id="mega" class="modal">
+  <div class="card">
+    <h2>확성기</h2>
+    <div class="note" id="megaNote"></div>
+    <textarea id="megaText" maxlength="60" rows="2" placeholder="모두에게 외칠 말 (60자까지)"></textarea>
+    <div id="megaFoot">
+      <span id="megaCount">0 / 60</span>
+      <button class="btn ghost" id="megaClose" type="button">닫기</button>
+      <button class="btn" id="megaGo" type="button">외치기</button>
+    </div>
   </div>
 </div>
 
@@ -374,11 +405,11 @@
 <div id="pass" class="modal">
   <div class="card">
     <h2>비밀번호 변경</h2>
-    <div class="note">지금 비밀번호를 확인한 뒤 새 비밀번호(8자 이상)로 바꿉니다.</div>
+    <div class="note">지금 비밀번호를 확인한 뒤 새 비밀번호(4자 이상)로 바꿉니다.</div>
     <form id="pwForm" autocomplete="off">
       <input id="pwOld" type="password" maxlength="72" placeholder="지금 비밀번호" autocomplete="current-password">
       <div style="height:8px"></div>
-      <input id="pwNew" type="password" maxlength="72" placeholder="새 비밀번호 (8자 이상)" autocomplete="new-password">
+      <input id="pwNew" type="password" maxlength="72" placeholder="새 비밀번호 (4자 이상)" autocomplete="new-password">
       <div style="height:8px"></div>
       <input id="pwNew2" type="password" maxlength="72" placeholder="새 비밀번호 한 번 더" autocomplete="new-password">
       <div class="row" style="justify-content:flex-end">
@@ -426,13 +457,9 @@
       <button type="button" id="tabJoin">회원가입</button>
     </div>
     <form id="authForm">
-      <label for="fUser">아이디 (영문 소문자·숫자 4~16자)</label>
-      <input id="fUser" autocomplete="username" autocapitalize="off" spellcheck="false" maxlength="16">
-      <div id="nickRow" style="display:none">
-        <label for="fNick">닉네임 (한글·영문·숫자 2~10자)</label>
-        <input id="fNick" maxlength="10">
-      </div>
-      <label for="fPass">비밀번호 (8자 이상)</label>
+      <label for="fNick" id="nickLabel">닉네임</label>
+      <input id="fNick" autocomplete="username" autocapitalize="off" spellcheck="false" maxlength="16">
+      <label for="fPass" id="passLabel">비밀번호</label>
       <input id="fPass" type="password" autocomplete="current-password" maxlength="72">
       <div id="authMsg"></div>
       <button class="btn" id="authGo" type="submit">로그인</button>

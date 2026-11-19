@@ -40,6 +40,8 @@ class Game {
     this.basePrices = {};
     for (const k of Object.keys(World.FURN)) this.basePrices[k] = World.FURN[k].price;
     for (const k of Object.keys(World.COSM)) if (!World.COSM[k].def) this.basePrices[k] = World.COSM[k].price;
+    this.basePrices.megaphone = World.MEGA.price;
+    this.megaQ = []; this.megaBusy = false; this.megaRecent = [];     // 확성기 차례 줄, 최근에 나간 것
     this.themeCols();   // 12층 비밀번호: 10분 동안 5번 틀리면 잠금
     this.ticks = 0; this.lastOnline = 0;
     this.timer = setInterval(() => this.tick(), TICK_MS);
@@ -128,6 +130,7 @@ class Game {
       floors: this.floorList(), pins: this.areaPins(p.area), cfg: this.liveForClient(),
       players: this.roster(p.area, p), online: this.players.size,
       now: Date.now(), wx: weather.get() });
+    this.megaReplay(p);
     this.broadcast(p.area, { t: 'join', p: this.pub(p) }, p);
     return p;
   }
@@ -145,6 +148,7 @@ class Game {
     if (!m || typeof m !== 'object') return;
     if (m.t === 'move') this.onMove(p, m);
     else if (m.t === 'chat') this.onChat(p, m);
+    else if (m.t === 'mega') this.onMegaphone(p, m).catch(e => console.error('확성기 오류:', e.message));
     else if (m.t === 'area') this.onArea(p, m);
     else if (m.t === 'umb') this.onUmbrella(p, m);
     else if (m.t === 'sit') this.onSit(p, m);
@@ -188,6 +192,45 @@ class Game {
       return;
     }
     p.x = x; p.z = z; p.f = f; p.lastMove = now; p.dirty = true;
+  }
+
+  // ---- 확성기 ----
+  // 코인을 내고 쓰면 모든 접속자의 화면 위쪽에 5초 동안 뜬다. 여러 개면 서버가 줄을 세워 5초 간격으로 내보낸다.
+  // 방금 들어온 사람에게도 1분 안에 나간 확성기를 다시 보여 준다.
+  async onMegaphone(p, m) {
+    if (typeof m.m !== 'string') return;
+    const text = m.m.replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, World.MEGA.len);
+    if (!text) return;
+    const now = Date.now();
+    if (p.megaAt && now - p.megaAt < World.MEGA.cooldown) {
+      return this.toast(p, '확성기는 ' + Math.round(World.MEGA.cooldown / 1000) + '초에 한 번 쓸 수 있습니다. ' + Math.ceil((World.MEGA.cooldown - (now - p.megaAt)) / 1000) + '초 남았습니다.');
+    }
+    if (this.megaQ.length >= World.MEGA.queue) return this.toast(p, '확성기가 많이 밀려 있습니다. 잠시 후 다시 써 주세요.');
+    const price = World.MEGA.price;
+    p.megaAt = now;                                          // 돈을 빼는 동안 두 번 눌러도 한 번만 나가게 먼저 표시
+    let money = p.money;
+    if (price > 0) {
+      money = await db.spend(p.id, price);
+      if (money === null) { p.megaAt = 0; return this.alive(p) && this.toast(p, '코인이 모자랍니다. 확성기는 한 번에 ' + price + '코인입니다.'); }
+      this.setMoney(p, money);
+    }
+    await db.audit(p.id, 'megaphone', (price ? '-' + price + '코인 ' : '') + text);
+    this.megaQ.push({ id: p.id, n: p.name, r: p.rank, m: text });
+    const ahead = this.megaQ.length - 1 + (this.megaBusy ? 1 : 0);
+    if (this.alive(p)) this.toast(p, ahead ? '확성기를 썼습니다. 앞에 ' + ahead + '개가 있어 차례대로 나옵니다.' : '확성기를 썼습니다.');
+    this.pumpMega();
+  }
+  pumpMega() {
+    if (this.megaBusy || !this.megaQ.length) return;
+    const it = this.megaQ.shift();
+    it.at = Date.now(); this.megaBusy = true;
+    this.megaRecent = this.megaRecent.filter(x => it.at - x.at < World.MEGA.replay).concat([it]).slice(-3);
+    this.broadcastAll({ t: 'mega', id: it.id, n: it.n, r: it.r, m: it.m });
+    setTimeout(() => { this.megaBusy = false; this.pumpMega(); }, World.MEGA.show);
+  }
+  megaReplay(p) {                                            // 방금 들어온 사람에게 최근 확성기
+    const now = Date.now();
+    for (const it of this.megaRecent) if (now - it.at < World.MEGA.replay && it.id !== p.id) this.send(p.ws, { t: 'mega', id: it.id, n: it.n, r: it.r, m: it.m, late: 1 });
   }
 
   onChat(p, m) {
@@ -275,7 +318,7 @@ class Game {
     if (next.theme === 'christmas' || next.theme === 'none') { L.theme = next.theme; this.themeCols(); }
     for (const k of Object.keys(this.basePrices)) {
       const price = Object.prototype.hasOwnProperty.call(L.prices, k) ? L.prices[k] : this.basePrices[k];
-      (World.FURN[k] || World.COSM[k]).price = price;
+      (World.FURN[k] || World.COSM[k] || (k === 'megaphone' ? World.MEGA : {})).price = price;
     }
     if (!quiet) this.broadcastAll({ t: 'cfg', cfg: this.liveForClient() });
   }
