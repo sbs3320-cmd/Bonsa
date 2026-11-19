@@ -1777,6 +1777,48 @@ function bonsaBoot() {
   $('mnEvents').addEventListener('click', function () { closeMenu(); openEvents(); });
   $('mnShop').addEventListener('click', function () { closeMenu(); openShop(); });
   $('mnMega').addEventListener('click', function () { closeMenu(); openMega(); });
+  /* ---------- 홈 화면 앱 (PWA) ---------- */
+  // 안드로이드 크롬 등은 설치 창을 직접 띄우고, 아이폰 Safari 는 '홈 화면에 추가' 방법을 안내한다.
+  var installEvt = null;
+  function isStandalone() {
+    try { return window.matchMedia('(display-mode: standalone)').matches || window.matchMedia('(display-mode: fullscreen)').matches || navigator.standalone === true; }
+    catch (e) { return false; }
+  }
+  var isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  function refreshInstall() {
+    var show = !isStandalone();
+    $('mnInstall').style.display = show ? '' : 'none';
+    $('authInstall').style.display = show ? 'block' : 'none';
+  }
+  window.addEventListener('beforeinstallprompt', function (e) { e.preventDefault(); installEvt = e; refreshInstall(); });
+  window.addEventListener('appinstalled', function () { installEvt = null; refreshInstall(); toast('홈 화면에 「본사」 앱을 설치했습니다.'); });
+  function doInstall() {
+    if (installEvt) {
+      var ev = installEvt; installEvt = null;
+      ev.prompt();
+      if (ev.userChoice) ev.userChoice.then(function () { refreshInstall(); });
+      return;
+    }
+    var t = isIOS
+      ? (/CriOS|FxiOS|EdgiOS|KAKAOTALK|NAVER|Instagram|FBAN/.test(navigator.userAgent)
+        ? '아이폰은 Safari 에서만 설치할 수 있습니다.\n\n1. 이 주소를 Safari 로 엽니다.\n2. 아래쪽 공유 버튼(네모에서 화살표가 나온 모양)을 누릅니다.\n3. "홈 화면에 추가"를 누릅니다.'
+        : '1. 화면 아래쪽(아이패드는 위쪽)의 공유 버튼(네모에서 화살표가 나온 모양)을 누릅니다.\n2. 목록을 올려 "홈 화면에 추가"를 누릅니다.\n3. 오른쪽 위 "추가"를 누르면 홈 화면에 「본사」 아이콘이 생깁니다.')
+      : /KAKAOTALK|NAVER|Instagram|FBAN|FB_IAB/.test(navigator.userAgent)
+        ? '카카오톡·네이버 같은 앱 안의 브라우저에서는 설치가 안 됩니다.\n\n오른쪽 위 메뉴에서 "다른 브라우저로 열기"(크롬, 삼성 인터넷)를 누른 뒤 다시 설치해 주세요.'
+        : '브라우저 메뉴(오른쪽 위 ⋮ 또는 아래쪽 ≡)를 열고 "앱 설치" 또는 "홈 화면에 추가"를 누릅니다.\n\n삼성 인터넷은 주소창 옆 설치 아이콘(↓)을 눌러도 됩니다.';
+    $('instText').textContent = t;
+    $('inst').style.display = 'flex';
+  }
+  $('mnInstall').addEventListener('click', function () { closeMenu(); doInstall(); });
+  $('authInstall').addEventListener('click', doInstall);
+  $('instClose').addEventListener('click', function () { $('inst').style.display = 'none'; });
+  $('inst').addEventListener('click', function (e) { if (e.target === $('inst')) $('inst').style.display = 'none'; });
+  refreshInstall();
+  if ('serviceWorker' in navigator && location.protocol !== 'file:') {
+    var regSW = function () { navigator.serviceWorker.register('/sw.js').catch(function () {}); };
+    if (document.readyState === 'complete') regSW(); else window.addEventListener('load', regSW);
+  }
+
   /* ---------- 확성기 ---------- */
   // 쓰기: 메뉴 → 확성기. 코인을 내면 모든 접속자 화면 위쪽에 5초 동안 뜬다.
   function megaRefresh() {

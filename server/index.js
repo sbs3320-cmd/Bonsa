@@ -20,11 +20,21 @@ const FILES = {
   '/game.js': ['game.js', 'text/javascript; charset=utf-8'],
   '/world.js': ['world.js', 'text/javascript; charset=utf-8'],
   '/fonts/Maplestory-Light.ttf': ['fonts/Maplestory-Light.ttf', 'font/ttf', true],
-  '/fonts/Maplestory-Bold.ttf': ['fonts/Maplestory-Bold.ttf', 'font/ttf', true]
+  '/fonts/Maplestory-Bold.ttf': ['fonts/Maplestory-Bold.ttf', 'font/ttf', true],
+  // 홈 화면 앱 (PWA)
+  '/manifest.webmanifest': ['manifest.webmanifest', 'application/manifest+json; charset=utf-8'],
+  '/sw.js': ['sw.js', 'text/javascript; charset=utf-8'],
+  '/icons/icon-96.png': ['icons/icon-96.png', 'image/png', true],
+  '/icons/icon-192.png': ['icons/icon-192.png', 'image/png', true],
+  '/icons/icon-512.png': ['icons/icon-512.png', 'image/png', true],
+  '/icons/maskable-512.png': ['icons/maskable-512.png', 'image/png', true],
+  '/icons/apple-touch-icon.png': ['icons/apple-touch-icon.png', 'image/png', true],
+  '/apple-touch-icon.png': ['icons/apple-touch-icon.png', 'image/png', true]
 };
-const fontCache = new Map();          // 글꼴은 크므로 한 번 압축해 두고 다시 쓴다
+const fontCache = new Map();          // 글꼴·아이콘은 한 번 압축해 두고 다시 쓴다
 const CSP = "default-src 'self'; script-src 'self' https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline'; " +
-  "img-src 'self' data: blob:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'";
+  "img-src 'self' data: blob:; connect-src 'self' https://cdnjs.cloudflare.com; worker-src 'self'; manifest-src 'self'; " +
+  "frame-ancestors 'none'; base-uri 'none'; form-action 'self'";
 // 관리자 화면은 외부 스크립트를 전혀 쓰지 않는다
 const ADMIN_CSP = "default-src 'self'; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'";
 

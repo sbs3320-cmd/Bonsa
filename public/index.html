@@ -4,6 +4,14 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>본사</title>
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="theme-color" content="#2f6fed">
+<link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png">
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="apple-mobile-web-app-title" content="본사">
 <style>
   @font-face { font-family: "Maplestory"; src: url("/fonts/Maplestory-Light.ttf") format("truetype"); font-weight: 400; font-display: swap; }
   @font-face { font-family: "Maplestory"; src: url("/fonts/Maplestory-Bold.ttf") format("truetype"); font-weight: 700; font-display: swap; }
@@ -198,6 +206,10 @@
     padding: 0 12px; font-size: 16px; color: #1c2430; }
   #authMsg { min-height: 20px; margin: 10px 0; font-size: 13px; color: #c73a3a; }
   #authGo { width: 100%; }
+  #authInstall { display: none; width: 100%; margin-top: 12px; min-height: 40px; border: 0; background: none;
+    color: #2f6fed; font-family: inherit; font-size: 14px; font-weight: 700; }
+  #inst { z-index: 30; }
+  #instText { white-space: pre-line; font-size: 15px !important; color: #1c2430 !important; }
   #chatLog { position: fixed; left: 10px; top: 52px; width: min(72vw, 340px); pointer-events: none;
     display: flex; flex-direction: column; gap: 3px; }
   #chatLog div { background: rgba(20,28,40,.6); color: #fff; font-size: 13px; line-height: 1.4;
@@ -310,6 +322,7 @@
       <div class="list" style="margin-top:8px">
         <button type="button" id="mnBgm">배경 음악<span></span></button>
         <button type="button" id="mnQuality">화질<span></span></button>
+        <button type="button" id="mnInstall">홈 화면에 앱 설치</button>
       </div>
     </div>
     <div class="sec"><div class="list"><button type="button" id="mnPass">비밀번호 변경</button><button type="button" id="mnLogout">로그아웃</button></div></div>
@@ -327,6 +340,14 @@
       <button class="btn ghost" id="megaClose" type="button">닫기</button>
       <button class="btn" id="megaGo" type="button">외치기</button>
     </div>
+  </div>
+</div>
+
+<div id="inst" class="modal">
+  <div class="card">
+    <h2>홈 화면에 앱 설치</h2>
+    <div class="note" id="instText"></div>
+    <div style="text-align:right;margin-top:6px"><button class="btn ghost" id="instClose" type="button">닫기</button></div>
   </div>
 </div>
 
@@ -464,6 +485,7 @@
       <div id="authMsg"></div>
       <button class="btn" id="authGo" type="submit">로그인</button>
     </form>
+    <button type="button" id="authInstall">📱 홈 화면에 앱으로 설치하기</button>
   </div>
 </div>
 <div id="err">3D 엔진을 불러오지 못했습니다.<br>네트워크 연결을 확인한 뒤 새로고침해 주세요.</div>
