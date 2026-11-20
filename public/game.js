@@ -1926,7 +1926,9 @@ function bonsaBoot() {
   var player = makeCharacter(BODY_COLORS[0], '[인턴] …');
   scene.add(player);
   var P = { x: 0, z: 24, face: Math.PI, walk: 0 };
-  var cam = { yaw: 0, pitch: 0.42, zoom: 1.3 };
+  var cam = { yaw: 0, pitch: 0.42, zoom: 1.3, follow: true, manualT: 0 };
+  // 시점 따라가기(기본 켜짐): 걸으면 카메라가 천천히 캐릭터 뒤로 돌아간다
+  try { cam.follow = localStorage.getItem('bonsa_follow') !== '0'; } catch (err) {}
   // 시점 거리 배율: 0.7(가까이) ~ 2.2(멀리). 기기에 기억해 둔다.
   try { var zs = parseFloat(localStorage.getItem('bonsa_zoom')); if (zs >= 0.7 && zs <= 2.2) cam.zoom = zs; } catch (err) {}
   var zoomSaveT = 0;
@@ -2163,6 +2165,7 @@ function bonsaBoot() {
     $('mnDeco').style.display = typeof canDeco === 'function' && canDeco() ? '' : 'none';
     $('mnBgm').lastChild.textContent = bgm.on ? '켜짐' : '꺼짐';
     $('mnQuality').lastChild.textContent = quality === 'low' ? '낮음 (가볍게)' : '보통';
+    $('mnFollow').lastChild.textContent = cam.follow ? '켜짐' : '꺼짐';
   }
   function menuOpen() { return $('menu').style.display === 'flex'; }
   function openMenu() { if (!playing || uiOpen) return; uiOpen = true; renderMenu(); $('menu').style.display = 'flex'; }
@@ -2570,6 +2573,11 @@ function bonsaBoot() {
     bgm.on = !bgm.on;
     try { localStorage.setItem('bonsa_bgm', bgm.on ? '1' : '0'); } catch (e) {}
     if (bgm.on) bgmStart(); else bgmStop();
+    renderMenu();
+  });
+  $('mnFollow').addEventListener('click', function () {
+    cam.follow = !cam.follow;
+    try { localStorage.setItem('bonsa_follow', cam.follow ? '1' : '0'); } catch (e) {}
     renderMenu();
   });
   $('mnQuality').addEventListener('click', function () {
@@ -3641,7 +3649,7 @@ function bonsaBoot() {
     }
     if (joy.id !== null && e.pointerId === joy.id) { joyMove(e); return; }
     if (e.pointerId !== look.id) return;
-    cam.yaw -= (e.clientX - look.x) * 0.007;
+    cam.yaw -= (e.clientX - look.x) * 0.007; cam.manualT = performance.now();
     cam.pitch += (e.clientY - look.y) * 0.005;
     cam.pitch = Math.max(0.12, Math.min(1.05, cam.pitch));
     look.x = e.clientX; look.y = e.clientY;
@@ -3703,6 +3711,11 @@ function bonsaBoot() {
       if (!W.blocked(area, nx, P.z, cols)) P.x = nx;
       if (!W.blocked(area, P.x, nz, cols)) P.z = nz;
       P.face = turn(P.face, Math.atan2(vx, vz), Math.min(1, dt * 12));
+      // 앞으로 걸을수록 강하게, 옆으로는 약하게 따라가고, 뒤로(카메라 쪽으로) 걸을 때와 방금 손으로 돌렸을 때는 따라가지 않는다
+      if (cam.follow && look.id === null && now - cam.manualT > 1200 && !shopOpen()) {
+        var fw = Math.max(0, Math.min(1, (iy / (mag || 1) + 0.35) / 1.35));
+        cam.yaw = turn(cam.yaw, P.face + Math.PI, Math.min(1, dt * 2.4 * fw * Math.min(1, mag)));
+      }
       P.walk += dt * 11 * mag;
     }
     player.position.set(P.x, mySit ? sitY() : (moving ? Math.abs(Math.sin(P.walk)) * 0.09 : 0), P.z);
