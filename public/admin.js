@@ -5,7 +5,7 @@
   var $ = function (id) { return document.getElementById(id); };
   var RANKS = { owner: '총관리자', ceo: '사장', manager: '부장', lead: '팀장', deputy: '부팀장', staff: '사원', intern: '인턴' };
   var RANK_SET = ['intern', 'staff', 'deputy', 'lead', 'manager', 'ceo'];
-  var TABS = [['overview', '개요'], ['users', '사용자'], ['floors', '층'], ['posts', '게시판'], ['events', '이벤트'], ['village', '마을·게임'], ['shop', '상점 값'], ['config', '안내원·공지·설정'], ['logs', '기록']];
+  var TABS = [['overview', '개요'], ['users', '사용자'], ['floors', '구역'], ['posts', '게시판'], ['events', '이벤트'], ['village', '마을·게임'], ['shop', '상점 값'], ['config', '안내원·공지·설정'], ['logs', '기록']];
   var cur = 'overview', msgTimer = 0;
 
   function say(t) { $('msg').textContent = t; $('msg').style.display = 'block'; clearTimeout(msgTimer); msgTimer = setTimeout(function () { $('msg').style.display = 'none'; }, 3200); }
@@ -52,7 +52,8 @@
     });
     return btn;
   }
-  function boardName(b) { return b === 1 ? '전체' : b + '층'; }
+  function fname(n) { return n === 1 ? '로비' : n === 12 ? '사장실' : n >= 2 && n <= 11 ? (n - 1) + '구역 (' + n + '층)' : n + '층'; }
+  function boardName(b) { return b === 1 ? '전체' : fname(b); }
 
   var VIEWS = {
     overview: function () {
@@ -91,12 +92,12 @@
           var ban = twice(el('button', { cls: u[6] ? 'ghost' : 'danger', text: u[6] ? '정지 해제' : '정지' }), u[6] ? '정지 해제' : '정지', function () {
             act('user.ban', { id: u[0], on: !u[6], reason: '관리자 화면' }).then(function () { say(u[2] + (u[6] ? ' 정지 해제' : ' 정지')); go('users'); });
           });
-          return [u[0], u[1], u[2], isOwner ? RANKS.owner : sel, u[4] ? u[4] + '층' : '-', u[5],
+          return [u[0], u[1], u[2], isOwner ? RANKS.owner : sel, u[4] ? fname(u[4]) : '-', u[5],
             el('span', { cls: 'tag' + (u[6] ? ' bad' : u[7] ? ' on' : ''), text: u[6] ? '정지' : u[7] ? '접속 중' : '오프라인' }),
             stamp(u[8]), el('div', { cls: 'row', style: 'margin:0;flex-wrap:nowrap' }, [amt, give]), isOwner ? '' : ban];
         });
         show([card('사용자 (' + r.list.length + '명)', '직급은 고르는 즉시 바뀝니다. 정지하면 바로 접속이 끊기고 로그인할 수 없습니다. 모든 변경은 기록에 남습니다.',
-          [table(['번호', '내부 계정', '닉네임', '직급', '층', '코인', '상태', '가입', '코인 주기/빼기', ''], rows)])]);
+          [table(['번호', '내부 계정', '닉네임', '직급', '구역', '코인', '상태', '가입', '코인 주기/빼기', ''], rows)])]);
       });
     },
     floors: function () {
@@ -104,7 +105,7 @@
         var rows = r.list.map(function (f) {
           var name = el('input', { value: f[1], maxlength: '12', placeholder: f[0] === 12 ? '사장실' : '이름 없음' });
           var save = el('button', { cls: 'ghost', text: '이름 저장', on: function () { act('floor.name', { floor: f[0], name: name.value }).then(function () { say(f[0] + '층 이름을 저장했습니다.'); }); } });
-          var lock = f[0] === 12 && f[3] ? twice(el('button', { cls: 'danger', text: '비밀번호 해제' }), '비밀번호 해제', function () { act('floor.unlock').then(function () { say('12층 비밀번호를 해제했습니다.'); go('floors'); }); }) : '';
+          var lock = f[0] === 12 && f[3] ? twice(el('button', { cls: 'danger', text: '비밀번호 해제' }), '비밀번호 해제', function () { act('floor.unlock').then(function () { say('사장실 비밀번호를 해제했습니다.'); go('floors'); }); }) : '';
           var repCell = '-';
           if (f[0] !== 12) {                                   // 층 대표자: 그 층 등록자 중에서 한 명
             var sel = el('select', {}, [el('option', { value: '0', text: '대표자 없음' })]);
@@ -116,9 +117,9 @@
             } });
             repCell = el('div', {}, [sel, ' ', repSave]);
           }
-          return [f[0] + '층', name, f[0] === 12 ? '-' : f[2] + ' / 20', repCell, f[0] === 12 ? (f[3] ? '잠김' : '열림') : '', save, lock];
+          return [fname(f[0]), name, f[0] === 12 ? '-' : f[2] + ' / 20', repCell, f[0] === 12 ? (f[3] ? '잠김' : '열림') : '', save, lock];
         });
-        show([card('층', '층 이름은 한글, 영문, 숫자로 12자까지입니다. 2~11층은 층마다 대표자를 한 명 둘 수 있고, 그 층 등록자 중에서 고릅니다.', [table(['층', '이름', '등록 인원', '대표자', '12층 잠금', '', ''], rows)])]);
+        show([card('구역', '이름은 한글, 영문, 숫자로 12자까지입니다. 1~10구역(2~11층)은 구역마다 대표자를 한 명 둘 수 있고, 그 구역 등록자 중에서 고릅니다.', [table(['구역', '이름', '구역원', '대표자', '사장실 잠금', '', ''], rows)])]);
       });
     },
     posts: function () {
@@ -158,27 +159,62 @@
         });
         var c1 = card('플레이존 랭킹 (이번 주 ' + r.ranks.week + '~)', '매주 월요일 0시(한국 시각)에 마감하고, 서버가 게임마다 지난주 1~3위에게 아래 코인을 한 번 줍니다. 지급 내역은 기록 탭(money)에 남습니다.',
           [el('div', {}, ['1위 ', prize[0], ' 2위 ', prize[1], ' 3위 ', prize[2], ' ', saveP]), table(['게임', '이번 주 1~5위', '지난주 1~3위 (보상 받음)'], rankRows)]);
-        // 2층 글
+        // 코인 규칙
+        var coin = ['attend', 'game', 'gameDay'].map(function (k) { return el('input', { type: 'number', value: r.coin[k], min: '0', max: '100000', style: 'width:90px' }); });
+        var saveC = el('button', { cls: 'ghost', text: '코인 저장', on: function () {
+          act('coin.set', { coin: { attend: Number(coin[0].value), game: Number(coin[1].value), gameDay: Number(coin[2].value) } }).then(function () { say('코인 규칙을 저장했습니다.'); });
+        } });
+        var c0 = card('출석·게임 코인', '출석은 한국 날짜로 하루 첫 접속에 한 번. 게임은 플레이존에서 한 판을 제대로 끝내면(숫자 기억 1단계, 암산 3문제, 1~25 완주) 주고, 하루 최대까지만 줍니다.',
+          [el('div', {}, ['출석 ', coin[0], ' 게임 한 판 ', coin[1], ' 게임 하루 최대 ', coin[2], ' ', saveC])]);
+        // 찬양 영상
+        var vUrl = el('input', { value: 'https://www.youtube.com/watch?v=' + r.praise.vid, style: 'width:100%' });
+        var vFile = el('input', { type: 'file', accept: 'image/jpeg,image/png' });
+        var saveV = el('button', { cls: 'ghost', text: '영상·사진 저장', on: function () {
+          var f = vFile.files && vFile.files[0];
+          var send = function (photo) { act('praise.set', { url: vUrl.value, photo: photo }).then(function () { say('찬양 영상을 저장했습니다.'); go('village'); }); };
+          if (!f) return send('');
+          if (f.size > 500 * 1024) return say('사진은 500KB 이하로 올려 주세요.');
+          var rd = new FileReader(); rd.onload = function () { send(String(rd.result)); }; rd.readAsDataURL(f);
+        } });
+        var cV = card('본투비헤븐 2층 찬양 영상', '2층에 들어가면 이 유튜브 영상이 나옵니다. 영상이 안 되는 사람에게는 사진(지금: ' + (r.praise.photo ? '올린 사진' : '기본 그림') + ')과 음악이 나옵니다.',
+          [vUrl, el('div', { style: 'margin-top:8px' }, ['대체 사진 (선택, 500KB 이하) ', vFile, ' ', saveV])]);
+        // 한 주 공지
+        var cN = card('한 주 공지', '게임 안 메뉴 → 한 주 공지 쓰기에서 총관리자·사장·부장이 씁니다. 접속할 때 10초 동안 보입니다.',
+          [el('div', { cls: 'wrap', text: r.notice && r.notice.m ? r.notice.m + ' — ' + (r.notice.by || '') + ' · ' + stamp(r.notice.at) : '지금 올라온 공지가 없습니다.' })]);
+        // 기도제목
         var pRows = r.prayers.map(function (p) {
           var b = el('button', { cls: p[5] ? 'ghost' : 'danger', text: p[5] ? '다시 보이기' : '숨기기', on: function () {
             act('prayer.hide', { id: p[0], hidden: !p[5] }).then(function () { go('village'); });
           } });
-          return [p[1], p[2], el('td', { cls: 'wrap', text: p[3] }), stamp(p[4]), p[5] ? '숨김' : '', b];
+          return [p[2], el('td', { cls: 'wrap', text: p[3] }), stamp(p[4]), p[5] ? '숨김' : '', b];
         });
-        var c2 = card('나무 회사 2층 글 (최근 ' + r.prayers.length + '개)', '숨기면 2층 화면에서 바로 사라집니다.', [pRows.length ? table(['마을', '쓴 사람', '글', '시각', '', ''], pRows) : el('div', { text: '글이 없습니다.' })]);
+        var c2 = card('기도제목 (최근 ' + r.prayers.length + '개)', '본투비헤븐 2층 방석에서 쓴 기도제목입니다. 숨기면 화면과 목록에서 바로 사라집니다.', [pRows.length ? table(['쓴 사람', '기도제목', '시각', '', ''], pRows) : el('div', { text: '글이 없습니다.' })]);
+        // 방명록
+        var gRows = r.guest.map(function (g) {
+          var b = el('button', { cls: g[4] ? 'ghost' : 'danger', text: g[4] ? '다시 보이기' : '숨기기', on: function () { act('guest.hide', { id: g[0], hidden: !g[4] }).then(function () { go('village'); }); } });
+          return [g[1], el('td', { cls: 'wrap', text: g[2] }), stamp(g[3]), g[4] ? '숨김' : '', b];
+        });
+        var cG = card('방명록 (최근 ' + r.guest.length + '개)', '본투비헤븐 1층 방명록입니다.', [gRows.length ? table(['쓴 사람', '내용', '시각', '', ''], gRows) : el('div', { text: '글이 없습니다.' })]);
         // 열매
         var fCards = r.fruits.map(function (f) {
           var rows = f[2].map(function (x) {
-            return [x[1], x[2], stamp(x[3]), twice(el('button', { cls: 'danger', text: '삭제' }), '삭제', function () { act('fruit.del', { id: x[0] }).then(function () { go('village'); }); })];
+            return [x[1], el('td', { cls: 'wrap', text: x[4] || '' }), x[2], '🙏' + x[5], stamp(x[3]), twice(el('button', { cls: 'danger', text: '삭제' }), '삭제', function () { act('fruit.del', { id: x[0] }).then(function () { go('village'); }); })];
           });
-          return el('div', {}, [el('b', { text: f[0] + ' 나무 · 전체 ' + f[1] + '개' }), rows.length ? table(['이름', '맺은 사람', '시각', ''], rows) : el('div', { text: '열매가 없습니다.' })]);
+          return el('div', {}, [el('b', { text: f[0] + ' 나무 · 전체 ' + f[1] + '개' }), table(['이름', '기도문', '맺은 사람', '함께 기도', '시각', ''], rows)]);
         });
-        var c3 = card('나무 회사 1층 열매 (마을별 최근 30개)', '나무에는 최근 20개만 달리고 기록은 모두 남습니다.', fCards);
+        var c3 = card('열매 나무 (곳마다 최근 30개)', '본투비헤븐 1층과 1~10구역의 나무입니다. 나무에는 최근 20개만 달리고 기록은 모두 남습니다.', fCards.length ? fCards : [el('div', { text: '열매가 없습니다.' })]);
+        // 전도 게시판
+        var KIND = { memo: '메모', stk: '스티커', photo: '사진' };
+        var bRows = r.board.map(function (b) {
+          var what = b[3] === 'photo' ? el('td', {}, [el('img', { src: '/photo/' + b[6], style: 'max-width:90px;max-height:70px;border-radius:6px' })]) : el('td', { cls: 'wrap', text: b[3] === 'memo' ? b[4] : '스티커 ' + (b[5] + 1) });
+          return [b[2], KIND[b[3]] || b[3], what, b[7] || '', twice(el('button', { cls: 'danger', text: '떼기' }), '떼기', function () { act('board.del', { id: b[0] }).then(function () { go('village'); }); })];
+        });
+        var cB = card('전도 게시판 (' + r.board.length + '개)', '1~10구역 전도 게시판에 붙은 것들입니다. 떼면 사진 파일도 함께 지워집니다.', [bRows.length ? table(['구역', '종류', '내용', '붙인 사람', ''], bRows) : el('div', { text: '붙은 것이 없습니다.' })]);
         // 출입명부
         var eRows = r.entries.map(function (e) { return [e[0], e[1], stamp(e[2])]; });
-        var c4 = card('출입명부 (최근 ' + eRows.length + '건)', '본사·나무 회사·플레이존에 들어간 기록입니다. 같은 사람이 같은 곳을 3분 안에 다시 들어가면 한 번만 적고, 180일 동안 보관합니다.',
+        var c4 = card('출입명부 (최근 ' + eRows.length + '건)', '본사 로비·본투비헤븐·플레이존에 들어간 기록입니다. 같은 사람이 같은 곳을 3분 안에 다시 들어가면 한 번만 적고, 180일 동안 보관합니다.',
           [eRows.length ? table(['닉네임', '장소', '시각'], eRows) : el('div', { text: '기록이 없습니다.' })]);
-        show([c1, c2, c3, c4]);
+        show([cN, c0, c1, cV, c2, cG, c3, cB, c4]);
       });
     },
     shop: function () {
@@ -219,7 +255,7 @@
         var sel = el('select');
         [['', '전체'], ['rank', '직급 변경'], ['money', '코인 이동'], ['admin_login', '관리자 로그인'], ['admin_rank', '관리자: 직급'], ['admin_money', '관리자: 코인'],
           ['admin_ban', '관리자: 정지'], ['admin_backup', '관리자: 백업'], ['admin_post', '관리자: 게시판'], ['admin_shop', '관리자: 값'], ['admin_config', '관리자: 설정'], ['floor_name', '층 이름'],
-          ['floor12_pass', '12층 비밀번호'], ['floor_rep', '층 대표자'], ['megaphone', '확성기'], ['admin_prayer', '2층 글 관리'], ['admin_fruit', '열매 삭제'], ['admin_prize', '주간 보상 변경'], ['event_new', '이벤트 생성'], ['event_close', '이벤트 종료']].forEach(function (o) {
+          ['floor12_pass', '사장실 비밀번호'], ['floor_rep', '구역 대표자'], ['megaphone', '확성기'], ['admin_prayer', '기도제목 관리'], ['admin_fruit', '열매 삭제'], ['admin_prize', '주간 보상 변경'], ['admin_guest', '방명록 관리'], ['admin_board', '전도 게시판 관리'], ['admin_coin', '코인 규칙'], ['admin_praise', '찬양 영상'], ['notice', '한 주 공지'], ['board', '전도 게시판'], ['event_new', '이벤트 생성'], ['event_close', '이벤트 종료']].forEach(function (o) {
           var x = el('option', { value: o[0], text: o[1] }); if (o[0] === (filter || '')) x.selected = true; sel.appendChild(x);
         });
         sel.addEventListener('change', function () { VIEWS.logs(sel.value); });

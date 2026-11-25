@@ -178,12 +178,31 @@ function pgStore() {
     // 없을 때만 넣는다. 넣었으면 true (주간 보상을 한 번만 주는 데 쓴다)
     async claimSetting(key, value) { const r = await pool.query('INSERT INTO settings (key, value) VALUES ($1, $2) ON CONFLICT (key) DO NOTHING RETURNING key', [key, value]); return r.rows.length > 0; },
     // ---- 마을: 열매, 기도 글, 출입명부, 게임 점수 ----
-    async addFruit(village, name, uid) {
-      const r = await pool.query('INSERT INTO fruits (village, name, uid) VALUES ($1, $2, $3) RETURNING id, name, created_at', [village, name, uid]);
+    async addFruit(village, name, uid, prayer) {
+      const r = await pool.query('INSERT INTO fruits (village, name, uid, prayer) VALUES ($1, $2, $3, $4) RETURNING id, name, prayer, amens, created_at', [village, name, uid, prayer || '']);
       return r.rows[0];
     },
+    // 열매 하나: 누가 맺었는지와 "함께 기도한" 사람들
+    async getFruit(id, uid) {
+      const r = await pool.query('SELECT f.id, f.village, f.name, f.prayer, f.amens, f.created_at, u.nickname AS by FROM fruits f LEFT JOIN users u ON u.id = f.uid WHERE f.id = $1', [id]);
+      if (!r.rows.length) return null;
+      const w = await pool.query('SELECT u.nickname, a.uid FROM fruit_amens a JOIN users u ON u.id = a.uid WHERE a.fruit_id = $1 ORDER BY a.created_at DESC LIMIT 60', [id]);
+      return { ...r.rows[0], who: w.rows.map(x => x.nickname), mine: w.rows.some(x => x.uid === uid) || (await pool.query('SELECT 1 FROM fruit_amens WHERE fruit_id = $1 AND uid = $2', [id, uid])).rows.length > 0 };
+    },
+    // 함께 기도: 한 사람 한 번. 새로 더했으면 { ok: true, n }
+    async amenFruit(id, uid) {
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        const ins = await client.query('INSERT INTO fruit_amens (fruit_id, uid) SELECT $1, $2 WHERE EXISTS (SELECT 1 FROM fruits WHERE id = $1) ON CONFLICT DO NOTHING RETURNING uid', [id, uid]);
+        let n = null;
+        if (ins.rows.length) n = (await client.query('UPDATE fruits SET amens = amens + 1 WHERE id = $1 RETURNING amens, village', [id])).rows[0];
+        await client.query('COMMIT');
+        return n ? { ok: true, n: n.amens, village: n.village } : { ok: false };
+      } catch (e) { await client.query('ROLLBACK').catch(() => {}); throw e; } finally { client.release(); }
+    },
     async listFruits(village, limit, offset) {
-      const r = await pool.query('SELECT f.id, f.name, f.created_at, u.nickname AS by FROM fruits f LEFT JOIN users u ON u.id = f.uid '
+      const r = await pool.query('SELECT f.id, f.name, f.prayer, f.amens, f.created_at, u.nickname AS by FROM fruits f LEFT JOIN users u ON u.id = f.uid '
         + 'WHERE f.village = $1 ORDER BY f.id DESC LIMIT $2 OFFSET $3', [village, limit, offset]);
       const c = await pool.query('SELECT count(*)::int AS n FROM fruits WHERE village = $1', [village]);
       return { rows: r.rows, total: c.rows[0].n };
@@ -202,6 +221,47 @@ function pgStore() {
       return r.rows;
     },
     async hidePrayer(id, hidden) { const r = await pool.query('UPDATE prayers SET hidden = $2 WHERE id = $1 RETURNING village', [id, hidden]); return r.rows.length ? r.rows[0].village : null; },
+    // ---- 방명록 ----
+    async addGuest(place, uid, nickname, body) {
+      return (await pool.query('INSERT INTO guestbook (place, uid, nickname, body) VALUES ($1, $2, $3, $4) RETURNING id, created_at', [place, uid, nickname, body])).rows[0];
+    },
+    async listGuest(place, limit) {
+      return (await pool.query('SELECT id, nickname, body, created_at FROM guestbook WHERE place = $1 AND NOT hidden ORDER BY id DESC LIMIT $2', [place, limit])).rows;
+    },
+    async listGuestAdmin(limit) { return (await pool.query('SELECT id, place, nickname, body, hidden, created_at FROM guestbook ORDER BY id DESC LIMIT $1', [limit])).rows; },
+    async hideGuest(id, hidden) { const r = await pool.query('UPDATE guestbook SET hidden = $2 WHERE id = $1 RETURNING place', [id, hidden]); return r.rows.length ? r.rows[0].place : null; },
+    // ---- 출석·게임 코인: 하루(한국 날짜) 기준. 줬으면 새 잔액, 이미 받았거나 한도를 넘으면 null ----
+    async attend(uid, day, amount) {
+      const r = await pool.query('UPDATE users SET last_attend = $2, money = money + $3 WHERE id = $1 AND last_attend IS DISTINCT FROM $2 RETURNING money', [uid, day, amount]);
+      return r.rows.length ? r.rows[0].money : null;
+    },
+    async gameCoin(uid, day, amount, cap) {
+      const r = await pool.query(
+        `UPDATE users SET money = money + $3, gcoin_sum = CASE WHEN gcoin_day = $2 THEN gcoin_sum + $3 ELSE $3 END, gcoin_day = $2
+         WHERE id = $1 AND (gcoin_day IS DISTINCT FROM $2 OR gcoin_sum + $3 <= $4) AND $3 <= $4 RETURNING money`, [uid, day, amount, cap]);
+      return r.rows.length ? r.rows[0].money : null;
+    },
+    // ---- 사진 (전도 게시판, 찬양 대체 사진) ----
+    async addPhoto(uid, mime, data) { return (await pool.query('INSERT INTO photos (uid, mime, data) VALUES ($1, $2, $3) RETURNING id', [uid, mime, data])).rows[0].id; },
+    async getPhoto(id) { const r = await pool.query('SELECT mime, data, uid FROM photos WHERE id = $1', [id]); return r.rows[0] || null; },
+    async delPhoto(id) { await pool.query('DELETE FROM photos WHERE id = $1', [id]); },
+    async countPhotos(uid, sinceMs) { return (await pool.query('SELECT count(*)::int AS n FROM photos WHERE uid = $1 AND created_at > to_timestamp($2 / 1000.0)', [uid, sinceMs])).rows[0].n; },
+    // 아무 데도 붙지 않은 지 하루가 지난 사진은 지운다
+    async pruneLoosePhotos(keep) {
+      await pool.query("DELETE FROM photos p WHERE created_at < now() - interval '1 day' AND NOT EXISTS (SELECT 1 FROM board_items b WHERE b.photo = p.id) AND NOT (p.id = ANY($1))", [keep || []]);
+    },
+    // ---- 전도 게시판 ----
+    async loadBoard() { return (await pool.query('SELECT b.*, u.nickname AS by FROM board_items b LEFT JOIN users u ON u.id = b.uid ORDER BY b.id')).rows; },
+    async addBoardItem(it) {
+      return (await pool.query('INSERT INTO board_items (floor, uid, kind, x, y, rot, color, body, sticker, photo) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id',
+        [it.floor, it.uid, it.kind, it.x, it.y, it.rot, it.color, it.body, it.sticker, it.photo])).rows[0].id;
+    },
+    async moveBoardItem(id, x, y) { await pool.query('UPDATE board_items SET x = $2, y = $3 WHERE id = $1', [id, x, y]); },
+    async delBoardItem(id) {
+      const r = await pool.query('DELETE FROM board_items WHERE id = $1 RETURNING photo', [id]);
+      if (r.rows.length && r.rows[0].photo) await pool.query('DELETE FROM photos WHERE id = $1', [r.rows[0].photo]);
+      return r.rows.length > 0;
+    },
     async logEntry(uid, nickname, place) { await pool.query('INSERT INTO entry_log (uid, nickname, place) VALUES ($1, $2, $3)', [uid, nickname, place]); },
     async listVisits(places, limit) {
       const r = places
@@ -253,6 +313,8 @@ function pgStore() {
         events: await q('SELECT * FROM events ORDER BY id'), event_entries: await q('SELECT * FROM event_entries ORDER BY event_id, user_id'),
         user_items: await q('SELECT * FROM user_items ORDER BY user_id, item'),
         settings: await q("SELECT * FROM settings WHERE key <> 'admin_totp' ORDER BY key"),
+        fruits: await q('SELECT * FROM fruits ORDER BY id'), prayers: await q('SELECT * FROM prayers ORDER BY id'),
+        guestbook: await q('SELECT * FROM guestbook ORDER BY id'), board_items: await q('SELECT * FROM board_items ORDER BY id'),
         audit_log: await q('SELECT * FROM (SELECT * FROM audit_log ORDER BY id DESC LIMIT 5000) t ORDER BY id')
       };
     },
@@ -345,7 +407,8 @@ function pgStore() {
 
 function memoryStore() {
   const users = [], floors = [], log = [], posts = [], furn = [], events = [], entries = [], settings = {};
-  const mv = { fruits: [], prayers: [], entries: [], scores: [], fruitId: 0, prayId: 0, entryId: 0 };   // 마을 기록
+  const mv = { fruits: [], prayers: [], entries: [], scores: [], fruitId: 0, prayId: 0, entryId: 0,
+    amens: [], guest: [], guestId: 0, photos: [], photoId: 0, board: [], boardId: 0 };   // 마을 기록
   let seq = 0, postSeq = 0, furnSeq = 0, eventSeq = 0;
   function row(floor) {
     let f = floors.find(x => x.floor === floor);
@@ -430,7 +493,40 @@ function memoryStore() {
     async setPassword(uid, hash) { const u = users.find(x => x.id === uid); if (!u) return 0; u.pass_hash = hash; u.token_ver = (u.token_ver || 0) + 1; return u.token_ver; },
     async getSetting(key) { return Object.prototype.hasOwnProperty.call(settings, key) ? settings[key] : null; },
     async claimSetting(key, value) { if (Object.prototype.hasOwnProperty.call(settings, key)) return false; settings[key] = value; return true; },
-    async addFruit(village, name, uid) { const f = { id: ++mv.fruitId, village, name, uid, created_at: new Date() }; mv.fruits.push(f); return f; },
+    async addFruit(village, name, uid, prayer) { const f = { id: ++mv.fruitId, village, name, uid, prayer: prayer || '', amens: 0, created_at: new Date() }; mv.fruits.push(f); return f; },
+    async getFruit(id, uid) {
+      const f = mv.fruits.find(x => x.id === id);
+      if (!f) return null;
+      const a = mv.amens.filter(x => x.fid === id).reverse();
+      return { ...f, by: (users.find(u => u.id === f.uid) || {}).nickname, who: a.slice(0, 60).map(x => (users.find(u => u.id === x.uid) || {}).nickname), mine: a.some(x => x.uid === uid) };
+    },
+    async amenFruit(id, uid) {
+      const f = mv.fruits.find(x => x.id === id);
+      if (!f || mv.amens.some(x => x.fid === id && x.uid === uid)) return { ok: false };
+      mv.amens.push({ fid: id, uid }); f.amens++;
+      return { ok: true, n: f.amens, village: f.village };
+    },
+    async addGuest(place, uid, nickname, body) { const r = { id: ++mv.guestId, place, uid, nickname, body, hidden: false, created_at: new Date() }; mv.guest.push(r); return r; },
+    async listGuest(place, limit) { return mv.guest.filter(x => x.place === place && !x.hidden).sort((a, b) => b.id - a.id).slice(0, limit); },
+    async listGuestAdmin(limit) { return mv.guest.slice().sort((a, b) => b.id - a.id).slice(0, limit); },
+    async hideGuest(id, hidden) { const x = mv.guest.find(r => r.id === id); if (!x) return null; x.hidden = hidden; return x.place; },
+    async attend(uid, day, amount) { const u = users.find(x => x.id === uid); if (!u || u.last_attend === day) return null; u.last_attend = day; u.money += amount; return u.money; },
+    async gameCoin(uid, day, amount, cap) {
+      const u = users.find(x => x.id === uid);
+      if (!u || amount > cap) return null;
+      const sum = u.gcoin_day === day ? (u.gcoin_sum || 0) : 0;
+      if (sum + amount > cap) return null;
+      u.gcoin_day = day; u.gcoin_sum = sum + amount; u.money += amount; return u.money;
+    },
+    async addPhoto(uid, mime, data) { mv.photos.push({ id: ++mv.photoId, uid, mime, data, at: Date.now() }); return mv.photoId; },
+    async getPhoto(id) { return mv.photos.find(x => x.id === id) || null; },
+    async delPhoto(id) { const i = mv.photos.findIndex(x => x.id === id); if (i >= 0) mv.photos.splice(i, 1); },
+    async countPhotos(uid, sinceMs) { return mv.photos.filter(x => x.uid === uid && x.at > sinceMs).length; },
+    async pruneLoosePhotos() {},
+    async loadBoard() { return mv.board.map(b => ({ ...b, by: (users.find(u => u.id === b.uid) || {}).nickname })); },
+    async addBoardItem(it) { const b = { ...it, id: ++mv.boardId, created_at: new Date() }; mv.board.push(b); return b.id; },
+    async moveBoardItem(id, x, y) { const b = mv.board.find(r => r.id === id); if (b) { b.x = x; b.y = y; } },
+    async delBoardItem(id) { const i = mv.board.findIndex(r => r.id === id); if (i < 0) return false; const b = mv.board.splice(i, 1)[0]; if (b.photo) this.delPhoto(b.photo); return true; },
     async listFruits(village, limit, offset) {
       const all = mv.fruits.filter(f => f.village === village).sort((a, b) => b.id - a.id);
       return { rows: all.slice(offset, offset + limit).map(f => ({ ...f, by: (users.find(u => u.id === f.uid) || {}).nickname })), total: all.length };

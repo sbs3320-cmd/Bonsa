@@ -1,7 +1,7 @@
 /* 본사 서비스 워커: 홈 화면 앱으로 설치되게 하고, 앱 화면을 빨리 띄운다.
    게임 파일은 늘 서버에서 새로 받고(그래야 업데이트가 바로 반영된다), 서버에 닿지 않을 때만 저장해 둔 것을 쓴다.
    로그인·관리자·실시간 연결은 절대 저장하지 않는다. */
-var CACHE = 'bonsa-v2';
+var CACHE = 'bonsa-v3';
 var SHELL = ['/', '/game.js', '/world.js', '/manifest.webmanifest', '/icons/icon-192.png'];
 var THREE_URL = 'https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js';
 
@@ -28,7 +28,7 @@ self.addEventListener('fetch', function (e) {
     return;
   }
   if (url.origin !== self.location.origin) return;
-  if (/^\/(api|admin|ws|music)/.test(url.pathname)) return;      // 음악은 크고 구간 요청을 써서 그대로 보낸다
+  if (/^\/(api|admin|ws|music|photo)/.test(url.pathname)) return;      // 음악은 크고 구간 요청을 써서 그대로 보낸다
   // 그 밖의 게임 파일: 서버 먼저, 안 되면 저장본
   var key = url.pathname === '/' ? '/' : url.pathname;
   e.respondWith(fetch(req).then(function (res) {

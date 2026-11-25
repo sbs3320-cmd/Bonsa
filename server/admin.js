@@ -8,6 +8,7 @@ const config = require('./config');
 const db = require('./db');
 const auth = require('./auth');
 const totp = require('./totp');
+const { sniffImage } = require('./board');
 const World = require('../public/world.js');
 
 const SESSION_MS = 30 * 60 * 1000;
@@ -60,10 +61,10 @@ function session(req) {
   const m = /(?:^|;\s*)bonsa_admin=([^;]+)/.exec(req.headers.cookie || '');
   return m ? unsign(m[1]) : null;
 }
-function readBody(req) {
+function readBody(req, max) {
   return new Promise((resolve, reject) => {
     let size = 0; const chunks = [];
-    req.on('data', c => { size += c.length; if (size > 16384) { reject(new Error('too large')); req.destroy(); } else chunks.push(c); });
+    req.on('data', c => { size += c.length; if (size > (max || 16384)) { reject(new Error('too large')); req.destroy(); } else chunks.push(c); });
     req.on('end', () => { try { resolve(JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}')); } catch (e) { reject(e); } });
     req.on('error', reject);
   });
@@ -168,7 +169,7 @@ const OPS = {
   },
   async 'floor.rep'(game, b, actor) {
     const floor = int(b.floor), id = int(b.id) || 0;
-    if (!(floor >= World.FLOOR_MIN && floor <= World.FLOOR_REG_MAX)) throw new Error('2~11층만 대표자를 둘 수 있습니다.');
+    if (!(floor >= World.FLOOR_MIN && floor <= World.FLOOR_REG_MAX)) throw new Error('1~10구역만 대표자를 둘 수 있습니다.');
     const r = await game.setRep(floor, id, actor);
     if (r.error) throw new Error('그 층에 등록된 사원만 대표자가 될 수 있습니다.');
     return {};
@@ -209,21 +210,64 @@ const OPS = {
     game.eventsChanged();
     return {};
   },
-  // 마을: 출입명부, 2층 글, 열매, 이번 주 랭킹과 보상 코인
+  // 마을: 출입명부, 기도제목, 방명록, 열매, 전도 게시판, 랭킹·코인 규칙, 찬양 영상
   async village(game) {
-    const W = World, place = a => a === 'in' ? '본사' : (W.VILLAGES[W.villageOf(a)] || {}).n + ' ' + ({ nm1: '나무 1층', nm2: '나무 2층', pz: '플레이존' })[W.kindOf(a)];
-    const ms = d => +new Date(d);
+    const W = World, ms = d => +new Date(d);
+    const place = a => a === 'in' ? '본사 로비' : ({ nm1_mu: W.BH_NAME + ' 1층', nm2_mu: W.BH_NAME + ' 2층', pz_gm: '플레이존' })[a] || a;
+    const tree = v => v === 'mu' ? W.BH_NAME : /^f\d+$/.test(v) ? W.floorName(Number(v.slice(1))) : v;
     const entries = (await db.listVisits(null, 200)).map(e => [e.nickname, place(e.place), ms(e.created_at)]);
-    const prayers = (await db.listPrayersAdmin(100)).map(x => [x.id, W.VILLAGES[x.village].n, x.nickname, x.body, ms(x.created_at), x.hidden ? 1 : 0]);
+    const prayers = (await db.listPrayersAdmin(100)).map(x => [x.id, x.village === 'mu' ? W.BH_NAME : x.village, x.nickname, x.body, ms(x.created_at), x.hidden ? 1 : 0]);
+    const guest = (await db.listGuestAdmin(100)).map(x => [x.id, x.nickname, x.body, ms(x.created_at), x.hidden ? 1 : 0]);
     const fruits = [];
-    for (const v of W.VKEYS) { const r = await db.listFruits(v, 30, 0); fruits.push([W.VILLAGES[v].n, r.total, r.rows.map(f => [f.id, f.name, f.by || '', ms(f.created_at)])]); }
+    for (const v of ['mu'].concat(Array.from({ length: 10 }, (_, i) => 'f' + (i + 2)))) {
+      const r = await db.listFruits(v, 30, 0);
+      if (r.total) fruits.push([tree(v), r.total, r.rows.map(f => [f.id, f.name, f.by || '', ms(f.created_at), f.prayer || '', f.amens || 0])]);
+    }
     const ranks = await game.vil.ranksData(0);
-    return { entries, prayers, fruits, ranks, games: Object.keys(W.GAMES).map(k => [k, W.GAMES[k].n, W.GAMES[k].unit]) };
+    return { entries, prayers, guest, fruits, ranks, board: game.bd.adminList(), coin: game.vil.coin, praise: game.vil.praise, notice: game.vil.notice,
+      games: Object.keys(W.GAMES).map(k => [k, W.GAMES[k].n, W.GAMES[k].unit]) };
+  },
+  async 'guest.hide'(game, b, actor) {
+    const id = int(b.id), v = Number.isInteger(id) ? await db.hideGuest(id, b.hidden !== false) : null;
+    if (!v) throw new Error('방명록 글을 찾지 못했습니다.');
+    await db.audit(actor, 'admin_guest', '방명록 ' + id + (b.hidden !== false ? ' 숨김' : ' 다시 보임'));
+    return {};
+  },
+  async 'board.del'(game, b, actor) {
+    const id = int(b.id);
+    if (!Number.isInteger(id) || !(await game.bd.adminDel(id))) throw new Error('게시판 항목을 찾지 못했습니다.');
+    await db.audit(actor, 'admin_board', '전도 게시판 #' + id + ' 뗌');
+    return {};
+  },
+  async 'coin.set'(game, b, actor) {
+    await game.vil.saveCoin(b.coin || {});
+    const c = game.vil.coin;
+    await db.audit(actor, 'admin_coin', '출석 ' + c.attend + ' / 게임 한 판 ' + c.game + ' / 게임 하루 최대 ' + c.gameDay);
+    return { coin: c };
+  },
+  // 찬양 영상(유튜브 주소)과 영상이 안 될 때 보여 줄 사진
+  async 'praise.set'(game, b, actor) {
+    const raw = String(b.url || '').trim();
+    const m = /(?:v=|youtu\.be\/|embed\/|shorts\/)([\w-]{11})/.exec(raw) || /^([\w-]{11})$/.exec(raw);
+    if (!m) throw new Error('유튜브 영상 주소를 넣어 주세요.');
+    let photo = game.vil.praise.photo;
+    if (typeof b.photo === 'string' && b.photo) {
+      const d = /^data:image\/(?:jpeg|png|webp);base64,([A-Za-z0-9+/=]+)$/.exec(b.photo);
+      const buf = d ? Buffer.from(d[1], 'base64') : null, mime = buf && buf.length <= 500 * 1024 ? sniffImage(buf) : null;
+      if (!mime) throw new Error('사진은 500KB 이하의 JPG, PNG 파일이어야 합니다.');
+      const old = photo;
+      photo = await db.addPhoto(actor, mime, buf);
+      if (old) await db.delPhoto(old);
+    }
+    if (b.photo === null && photo) { await db.delPhoto(photo); photo = 0; }
+    await game.vil.setPraise(m[1], photo);
+    await db.audit(actor, 'admin_praise', '찬양 영상 ' + m[1] + (photo ? ' / 사진 ' + photo : ''));
+    return { praise: game.vil.praise };
   },
   async 'prayer.hide'(game, b, actor) {
     const id = int(b.id), v = Number.isInteger(id) ? await db.hidePrayer(id, b.hidden !== false) : null;
     if (!v) throw new Error('글을 찾지 못했습니다.');
-    await db.audit(actor, 'admin_prayer', '나무 2층 글 ' + id + (b.hidden !== false ? ' 숨김' : ' 다시 보임'));
+    await db.audit(actor, 'admin_prayer', '기도제목 ' + id + (b.hidden !== false ? ' 숨김' : ' 다시 보임'));
     await game.vil.refreshPrayers(v);
     return {};
   },
@@ -303,7 +347,7 @@ function handle(req, res, url, ip, game, serveFile) {
       const user = s && s.s === 'full' ? await db.findById(s.u) : null;
       // 요청마다 다시 확인: 세션이 살아 있고, 그 계정이 지금도 총관리자이며 정지되지 않았는지
       if (!user || user.banned || !config.superAdmin || user.username !== config.superAdmin) return json(res, 401, { ok: false, error: '다시 로그인해 주세요.', relogin: true });
-      const b = await readBody(req);
+      const b = await readBody(req, 700000);                      // 찬양 대체 사진을 올릴 수 있게 조금 크게
       const op = typeof b.op === 'string' && Object.prototype.hasOwnProperty.call(OPS, b.op) ? OPS[b.op] : null;
       if (!op) return json(res, 400, { ok: false, error: '없는 기능입니다.' });
       try { json(res, 200, Object.assign({ ok: true }, await op(game, b, user.id))); }

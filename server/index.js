@@ -12,6 +12,7 @@ const Game = require('./game');
 const World = require('../public/world');
 const weather = require('./weather');
 const admin = require('./admin');
+const { sniffImage, PHOTO_MAX, PHOTO_PER_HOUR } = require('./board');
 
 const game = new Game();
 const PUBLIC = path.join(__dirname, '..', 'public');
@@ -29,11 +30,13 @@ const FILES = {
   '/icons/icon-512.png': ['icons/icon-512.png', 'image/png', true],
   '/icons/maskable-512.png': ['icons/maskable-512.png', 'image/png', true],
   '/icons/apple-touch-icon.png': ['icons/apple-touch-icon.png', 'image/png', true],
-  '/apple-touch-icon.png': ['icons/apple-touch-icon.png', 'image/png', true]
+  '/apple-touch-icon.png': ['icons/apple-touch-icon.png', 'image/png', true],
+  '/img/praise.jpg': ['img/praise.jpg', 'image/jpeg', true]
 };
 const fontCache = new Map();          // 글꼴·아이콘은 한 번 압축해 두고 다시 쓴다
 const CSP = "default-src 'self'; script-src 'self' https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline'; " +
   "img-src 'self' data: blob:; connect-src 'self' https://cdnjs.cloudflare.com; media-src 'self'; worker-src 'self'; manifest-src 'self'; " +
+  "frame-src https://www.youtube-nocookie.com https://www.youtube.com; " +
   "frame-ancestors 'none'; base-uri 'none'; form-action 'self'";
 // 관리자 화면은 외부 스크립트를 전혀 쓰지 않는다
 const ADMIN_CSP = "default-src 'self'; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'";
@@ -158,6 +161,26 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  // 전도 게시판 사진 올리기: 로그인 토큰 확인, 그림 파일만, 450KB까지, 한 사람 1시간에 20장
+  if (req.method === 'POST' && url === '/api/photo') {
+    const ip = clientIp(req);
+    if (!apiLimit.hit(ip)) return json(res, 429, { ok: false, error: '요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.' });
+    uploadPhoto(req, res).catch(e => {
+      if (e.message !== 'too large') console.error(e);
+      if (!res.headersSent) json(res, 400, { ok: false, error: e.message === 'too large' ? '사진이 너무 큽니다.' : '사진을 올리지 못했습니다.' });
+    });
+    return;
+  }
+  const pm = req.method === 'GET' ? /^\/photo\/(\d{1,9})$/.exec(url) : null;
+  if (pm) {
+    db.getPhoto(Number(pm[1])).then(ph => {
+      if (!ph) { res.writeHead(404); return res.end(); }
+      res.writeHead(200, { 'Content-Type': ph.mime, 'Cache-Control': 'public, max-age=86400', 'X-Content-Type-Options': 'nosniff', 'Content-Security-Policy': "default-src 'none'" });
+      res.end(ph.data);
+    }).catch(() => { res.writeHead(500); res.end(); });
+    return;
+  }
+
   if (admin.handle(req, res, url, clientIp(req), game, (name, type) => {
     fs.readFile(path.join(PUBLIC, name), (err, data) => {
       if (err) { res.writeHead(500); return res.end(); }
@@ -209,6 +232,25 @@ const server = http.createServer((req, res) => {
     res.end(data);
   });
 });
+
+function readRaw(req, max) {
+  return new Promise((resolve, reject) => {
+    let size = 0; const chunks = [];
+    req.on('data', c => { size += c.length; if (size > max) { reject(new Error('too large')); req.destroy(); } else chunks.push(c); });
+    req.on('end', () => resolve(Buffer.concat(chunks)));
+    req.on('error', reject);
+  });
+}
+async function uploadPhoto(req, res) {
+  const m = /^Bearer (\S+)$/.exec(req.headers.authorization || ''), tk = m ? auth.readToken(m[1]) : null;
+  const user = tk ? await db.findById(tk.u) : null;
+  if (!user || user.banned || !auth.tokenOk(tk, user)) return json(res, 401, { ok: false, error: '다시 로그인해 주세요.' });
+  if (!/^image\/(jpeg|png|webp)$/.test(req.headers['content-type'] || '')) return json(res, 400, { ok: false, error: 'JPG, PNG 사진만 올릴 수 있습니다.' });
+  if (await db.countPhotos(user.id, Date.now() - 3600 * 1000) >= PHOTO_PER_HOUR) return json(res, 429, { ok: false, error: '사진은 1시간에 ' + PHOTO_PER_HOUR + '장까지 올릴 수 있습니다.' });
+  const buf = await readRaw(req, PHOTO_MAX), mime = sniffImage(buf);
+  if (!mime) return json(res, 400, { ok: false, error: '그림 파일이 아닙니다.' });
+  json(res, 200, { ok: true, id: await db.addPhoto(user.id, mime, buf) });
+}
 
 // 실시간 통신. 접속하면 5초 안에 로그인 토큰을 보내야 한다.
 // 한 메시지는 4KB까지 (가장 긴 게시글이 한글 500자 = 약 1.6KB)

@@ -11,16 +11,16 @@ function bonsaBoot() {
     '반갑습니다, 본사입니다. 게임 방법을 간단히 안내해 드릴게요.',
     '이동: 폰에서는 화면 아래쪽을 누른 채 끌면 걷고, 위쪽을 끌면 시점이 돌아갑니다. PC에서는 WASD와 마우스 드래그를 씁니다.',
     '날씨: 바깥은 실제 대한민국 시각과 울산 날씨를 따라갑니다. 비나 눈이 오면 우산 버튼이 나타나요.',
-    '엘리베이터: 층 사이는 엘리베이터로만 이동합니다. 타면 층 선택 화면이 뜨고, 이름이 등록된 층은 그 이름으로 보입니다.',
-    '층 안내판: 각 층 엘리베이터 옆 안내판에서 그 층에 등록하거나 등록을 해제할 수 있습니다.',
-    '층 등록: 2~11층 중 한 곳에 입장 등록을 할 수 있습니다. 한 사람은 한 층에만 등록할 수 있어요.',
-    '꾸미기: 등록한 층에서 메뉴의 꾸미기를 누르면 가구를 놓고, 옮기고, 돌리고, 지울 수 있습니다. 의자와 소파에는 앉을 수 있어요.',
-    '게시판: 로비 전체 게시판은 누구나 읽고, 층 게시판은 그 층에 등록한 사원이 글을 씁니다. 고정한 글은 게시판에 종이로 붙어요.',
+    '엘리베이터: 로비와 1~10구역, 사장실 사이는 엘리베이터로 오갑니다. 엘리베이터 앞에 서면 구역 고르는 창이 바로 떠요. 게임마을도 로비 엘리베이터에서 갑니다.',
+    '구역 안내판: 각 구역 엘리베이터 옆 안내판에서 그 구역에 등록하거나 등록을 해제할 수 있습니다.',
+    '구역 등록: 1~10구역 중 한 곳에 등록할 수 있습니다. 구역마다 열매 기도 나무와 구역원이 꾸미는 전도 게시판이 있어요.',
+    '꾸미기: 등록한 구역에서 메뉴의 꾸미기를 누르면 가구를 놓고, 옮기고, 돌리고, 지울 수 있습니다. 의자와 소파에는 앉을 수 있어요.',
+    '게시판: 로비 전체 게시판은 누구나 읽고, 구역 게시판은 그 구역에 등록한 구역원이 글을 씁니다. 고정한 글은 게시판에 종이로 붙어요.',
     '직급: 인턴으로 시작해 사원, 부팀장, 팀장, 부장, 사장 순으로 올라갑니다. 팀장 이상이 아래 직급을 승진시킵니다.',
     '메뉴: 오른쪽 위 메뉴에서 프로필, 사원 명부, 게시판, 음악 설정, 로그아웃을 쓸 수 있어요. 캐릭터를 눌러도 프로필이 열립니다.',
     '이벤트: 메뉴의 이벤트에서 참가 신청을 하면 부팀장 이상이 성공을 판정하고, 성공하면 코인을 받습니다.',
     '상점: 메뉴의 상점에서 코인으로 털 색과 모자를 사고, 꾸미기에서 가구를 삽니다. 처음에 200코인을 드려요.',
-    '12층 사장실은 비밀번호가 걸려 있을 수 있습니다. 그럼 즐거운 회사 생활 되세요!'
+    '무거마을의 본투비헤븐에서는 방명록과 기도제목을, 게임마을 플레이존에서는 게임으로 코인을 받을 수 있어요. 매일 첫 접속에 출석 코인도 드려요!'
   ];
 
   /* ---------- 렌더러 ---------- */
@@ -193,7 +193,7 @@ function bonsaBoot() {
   // 야외에서 내 캐릭터와 카메라 사이에 큰 물체(가게, 나무 잎, 가로등 머리, 크리스마스트리)가 끼면 카메라를 그 앞으로 당긴다.
   // 물체는 상자(최소·최대 x, y, z)로 단순하게 잡는다. 판정은 상자 수십 개뿐이라 휴대폰에서도 가볍다.
   // 가는 기둥(가로등 기둥, 나무 줄기)은 넣지 않는다. 지나갈 때마다 카메라가 확 당겨져 오히려 어지럽다.
-  var CAM_BLOCK = [], CAM_BLOCK_X = [], CAM_BLOCK_V = [];
+  var CAM_BLOCK = [], CAM_BLOCK_X = [], CAM_BLOCK_V = [], CAM_BLOCK_M = [];   // 공통, 크리스마스, 게임마을, 무거마을
   (function () {
     function bx(x0, x1, y0, y1, z0, z1, list) { (list || CAM_BLOCK).push([x0, x1, y0, y1, z0, z1]); }
     W.SHOPS.forEach(function (sh) { bx(sh[0] - 3.2, sh[0] + 3.2, 0, 3.8, W.SHOP_Z - 2.7, W.SHOP_Z + 2.7); });
@@ -206,7 +206,7 @@ function bonsaBoot() {
       bx(Math.min(l[0], l[0] + dir * 1.2), Math.max(l[0], l[0] + dir * 1.2), 3.2, 3.95, l[1] - 0.4, l[1] + 0.4);   // 등
     });
     bx(W.XMAS.tree[0] - 2.1, W.XMAS.tree[0] + 2.1, 0, 7.5, W.XMAS.tree[1] - 2.1, W.XMAS.tree[1] + 2.1, CAM_BLOCK_X);
-    [W.NAMU, W.PLAY].forEach(function (B) { bx(B.x - B.w / 2 - 0.3, B.x + B.w / 2 + 0.3, 0, 7.7, B.z - B.d / 2 - 0.3, B.z + B.d / 2 + 0.3); });
+    [W.NAMU, W.PLAY].forEach(function (B) { bx(B.x - B.w / 2 - 0.3, B.x + B.w / 2 + 0.3, 0, 7.7, B.z - B.d / 2 - 0.3, B.z + B.d / 2 + 0.3, B === W.NAMU ? CAM_BLOCK_M : CAM_BLOCK_V); });
     bx(W.BOOTH.x - 1.8, W.BOOTH.x + 1.8, 0, 4.5, W.BOOTH.z - 1.8, W.BOOTH.z + 1.8, CAM_BLOCK_V);              // 마을 엘리베이터
   })();
   // 선분 (ax,ay,az) → (bx,by,bz) 가 상자에 처음 닿는 비율(0~1). 안 닿으면 1.
@@ -226,7 +226,8 @@ function bonsaBoot() {
     var dx = cx - tx, dy = cy - ty, dz = cz - tz, best = 1, i;
     for (i = 0; i < CAM_BLOCK.length; i++) best = Math.min(best, segHit(tx, ty, tz, dx, dy, dz, CAM_BLOCK[i]));
     if (xmasOn) for (i = 0; i < CAM_BLOCK_X.length; i++) best = Math.min(best, segHit(tx, ty, tz, dx, dy, dz, CAM_BLOCK_X[i]));
-    if (area === 'o_sa' || area === 'o_sn') for (i = 0; i < CAM_BLOCK_V.length; i++) best = Math.min(best, segHit(tx, ty, tz, dx, dy, dz, CAM_BLOCK_V[i]));
+    if (area === 'out') for (i = 0; i < CAM_BLOCK_M.length; i++) best = Math.min(best, segHit(tx, ty, tz, dx, dy, dz, CAM_BLOCK_M[i]));
+    if (area === 'o_gm') for (i = 0; i < CAM_BLOCK_V.length; i++) best = Math.min(best, segHit(tx, ty, tz, dx, dy, dz, CAM_BLOCK_V[i]));
     return best;                                                   // 0~1: 카메라까지 거리 중 비어 있는 비율
   }
   var camPull = 1;                                                  // 지금 쓰는 비율 (부드럽게 바뀐다)
@@ -314,7 +315,7 @@ function bonsaBoot() {
     var tag = labelSprite(text, 0.42, { bg: 'rgba(20,28,40,0.78)', fs: 44, padX: 22, padY: 12 });
     onTop(tag); tag.position.y = TAG_Y; g.add(tag); g.userData.tag = tag; g.userData.tagText = text;
     if (rep) {                                                     // 층 대표자: 이름표 위에 금색 띠
-      var rt = labelSprite('★ ' + rep + '층 대표', 0.32, { bg: 'rgba(214,160,30,0.95)', color: '#ffffff', fs: 40, padX: 18, padY: 8 });
+      var rt = labelSprite('★ ' + W.floorName(rep) + ' 대표', 0.32, { bg: 'rgba(214,160,30,0.95)', color: '#ffffff', fs: 40, padX: 18, padY: 8 });
       onTop(rt); rt.position.y = TAG_Y + 0.4; g.add(rt); g.userData.repTag = rt;
     }
     g.userData.rep = rep || 0;
@@ -779,7 +780,7 @@ function bonsaBoot() {
     function lawn(x, z) {
       if (Math.abs(x) < 3.1 && z > 5.5 && z < 40.6) return false;
       if (Math.abs(x) < 11.5 && z > 5.5 && z < 11.6) return false;
-      var fz0 = W.NAMU.z + W.NAMU.d / 2;                                  // 나무 회사·플레이존 앞길
+      var fz0 = W.NAMU.z + W.NAMU.d / 2;                                  // 본투비헤븐·플레이존 앞길
       if (Math.abs(Math.abs(x) - W.PLAY.x) < 2.6 && z > fz0 - 0.2 && z < fz0 + 5.6) return false;
       if (Math.abs(x) > 10.5 && Math.abs(x) < W.PLAY.x + 2.6 && z > 5.8 && z < 9) return false;
       return !W.blocked('out', x, z);
@@ -1002,7 +1003,7 @@ function bonsaBoot() {
       var lp = new THREE.Mesh(new THREE.BoxGeometry(3.2, 0.08, 1.2), roomLight);
       lp.position.set(p[0], LH - 0.05, p[1]); lp.userData.dyn = true; g.add(lp); roomTops.push(lp);
     });
-    if (bare) return;                                  // 나무 회사·플레이존: 엘리베이터와 안내판이 없다
+    if (bare) return;                                  // 본투비헤븐·플레이존: 엘리베이터와 안내판이 없다
     // 엘리베이터 문
     var ex = W.ELEV.x, ez = -LD / 2 + 0.12;
     box(3.2, 3.7, 0.24, 0x596375, ex, 1.85, ez, g);
@@ -1015,16 +1016,32 @@ function bonsaBoot() {
     box(0.8, 1.05, 0.5, 0x39424f, kx, 0.525, kz, g);
     var scr = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.5, 0.04), new THREE.MeshBasicMaterial({ color: 0x9fe0ff }));
     scr.position.set(kx, 1.3, kz + 0.12); scr.rotation.x = -0.5; g.add(scr);
-    var kl = labelSprite('층 안내판', 0.42, { bg: 'rgba(20,28,40,0.78)', fs: 44 });
+    var kl = labelSprite('구역 안내판', 0.42, { bg: 'rgba(20,28,40,0.78)', fs: 44 });
     kl.position.set(kx, 2.1, kz); g.add(kl);
   }
+  // 1~10구역 전도 게시판(앞 벽): 메모·스티커·사진을 그린 그림을 벽에 붙인다
+  var bdCanvas3 = document.createElement('canvas'); bdCanvas3.width = 1400; bdCanvas3.height = 700;
+  var bdTex = new THREE.CanvasTexture(bdCanvas3); bdTex.encoding = THREE.sRGBEncoding;
+  var bdItems = [], bdPhotos = {};
+  var officeTree = new THREE.Group(); office.add(officeTree);
+  var TREE_S = { nm1: 1, floor: 0.72 };                   // 열매 나무 크기 (본투비헤븐 1층, 구역)
   (function buildOffice() {
     roomShell(office, texMat(tileTex('#8fa3b8', '#7d90a5', LW / 2, LD / 2)), 0xf1f3f6, 0xe6eaef);
-    // 층 게시판 자리 (북쪽 벽 왼쪽). 글쓰기는 5단계에서.
+    // 구역 게시판 자리 (북쪽 벽 왼쪽)
     box(4.6, 2.6, 0.12, 0x6b4f37, -6.5, 2.6, -LD / 2 + 0.08, office);
     box(4.2, 2.2, 0.06, 0xd9b98a, -6.5, 2.6, -LD / 2 + 0.15, office);
-    var bl = signPlane('층 게시판', 0.45, { fs: 56, bg: '#1c2430', radius: 12 });
+    var bl = signPlane('구역 게시판', 0.45, { fs: 56, bg: '#1c2430', radius: 12 });
     bl.position.set(-6.5, 4.25, -LD / 2 + 0.16); office.add(bl);
+    // 전도 게시판 (남쪽 벽 왼쪽, 방 안쪽을 본다)
+    var B = W.FL_BOARD, bz = LD / 2;
+    box(B.w + 0.4, B.h + 0.4, 0.14, 0x6b4f37, B.x, 2.55, bz - 0.08, office);
+    var bp = new THREE.Mesh(new THREE.PlaneGeometry(B.w, B.h), new THREE.MeshBasicMaterial({ map: bdTex }));
+    bp.rotation.y = Math.PI; bp.position.set(B.x, 2.55, bz - 0.16); bp.userData.dyn = true; office.add(bp);
+    var bs = signPlane('✝ 전도 게시판', 0.5, { fs: 60, bg: '#c0392b', radius: 12 });
+    bs.rotation.y = Math.PI; bs.position.set(B.x, 4.65, bz - 0.17); office.add(bs);
+    // 열매 기도 나무 (앞쪽 오른편)
+    buildTree(officeTree, W.FL_TREE, TREE_S.floor, '이름과 기도문을 적으면 열매가 맺혀요');
+    officeTree.traverse(function (o) { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
   })();
   (function buildCeo() {
     roomShell(ceo, texMat(tileTex('#b98d5e', '#a57b4f', LW / 3, LD / 3)), 0xefe7da, 0xe5dccd);
@@ -1510,13 +1527,13 @@ function bonsaBoot() {
     });
   }
 
-  /* ---------- 마을: 나무 회사·플레이존 건물(세 마을 공통), 삼산·성남 가운데, 건물 안 ---------- */
+  /* ---------- 마을: 무거마을의 본투비헤븐, 게임마을의 플레이존·마을 엘리베이터, 건물 안 ---------- */
   function vName(v) { return W.VILLAGES[v] ? W.VILLAGES[v].n : ''; }
   var nm1G = new THREE.Group(), nm2G = new THREE.Group(), pzG = new THREE.Group();
   [nm1G, nm2G, pzG].forEach(function (g) { g.visible = false; scene.add(g); });
-  var villSigns = {};
   (function buildVillageOutside() {
-    var ext = new THREE.Group(); outdoor.add(ext);
+    var extN = new THREE.Group(), extP = new THREE.Group(), ext;      // 본투비헤븐은 무거마을(본사와 함께), 플레이존은 게임마을에만
+    hq.add(extN); vill.add(extP);
     var N = W.NAMU, Pz = W.PLAY, fz = N.z + N.d / 2;
     var pave = tileTex('#c4b9a5', '#a39983', 1, 1);
     function pad(x, z, w, d) {
@@ -1526,6 +1543,7 @@ function bonsaBoot() {
     }
     // 광장에서 건물 문까지 이어지는 길
     [N, Pz].forEach(function (B) {
+      ext = B === N ? extN : extP;
       pad(B.x, fz + 2.6, 4.4, 5.2);
       var x0 = B.x < 0 ? B.x + 2.2 : 11.1, x1 = B.x < 0 ? -11.1 : B.x - 2.2;
       pad((x0 + x1) / 2, 7.4, Math.abs(x1 - x0), 2.6);
@@ -1544,7 +1562,8 @@ function bonsaBoot() {
         box(1.4, 1.1, 0.12, col, B.x + dx, y, fz + 0.04, ext);
       });
     }
-    // 나무 회사: 2층짜리 따뜻한 나무색 건물, 초록 간판
+    // 본투비헤븐: 2층짜리 따뜻한 크림색 건물, 하늘빛 간판
+    ext = extN;
     box(N.w, 7.2, N.d, 0xf3e6cf, N.x, 3.6, N.z, ext);
     box(N.w + 0.3, 0.35, N.d + 0.3, 0x7a5236, N.x, 3.6, N.z, ext);          // 층 띠
     box(N.w + 0.6, 0.5, N.d + 0.6, 0x6b4a32, N.x, 7.45, N.z, ext);          // 지붕
@@ -1552,8 +1571,8 @@ function bonsaBoot() {
     [-1, 1].forEach(function (sx) { [-1, 1].forEach(function (sz) { box(0.45, 7.2, 0.45, 0x7a5236, N.x + sx * N.w / 2, 3.6, N.z + sz * N.d / 2, ext); }); });
     windows(N, 1.9, 0xbfe3f5, 0x7a5236); windows(N, 5.4, 0xbfe3f5, 0x7a5236);
     door(N, 0x6b4a32);
-    box(6.4, 1.5, 0.25, 0x3f8f4e, N.x, 4.55, fz + 0.15, ext);
-    var nsg = signPlane('나무', 1.15, { fs: 110, bg: '#3f8f4e', padX: 30, padY: 6 });
+    box(8.4, 1.5, 0.25, 0x3d6fb5, N.x, 4.55, fz + 0.15, ext);
+    var nsg = signPlane(W.BH_NAME, 1.1, { fs: 104, bg: '#3d6fb5', padX: 30, padY: 6 });
     nsg.position.set(N.x, 4.55, fz + 0.3); ext.add(nsg);
     var gBush2 = new THREE.IcosahedronGeometry(0.7, 1);
     [-1, 1].forEach(function (sd) {
@@ -1561,7 +1580,10 @@ function bonsaBoot() {
       var pot = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 0.5, 0.6, 14), mat(0x8d7a64)); pot.position.set(px, 0.3, fz + 1.0); ext.add(pot);
       var bu = new THREE.Mesh(gBush2, mat(0x4d9042)); bu.scale.set(0.8, 1.3, 0.8); bu.position.set(px, 1.35, fz + 1.0); ext.add(bu);
     });
+    extN.traverse(function (o) { if (o.isMesh && !o.userData.ns) { o.castShadow = !o.userData.rcv; o.receiveShadow = true; } });
+    mergeStatic(extN, true);
     // 플레이존: 보랏빛 건물에 반짝이는 줄무늬와 간판
+    ext = extP;
     box(Pz.w, 6.4, Pz.d, 0x3b2a6b, Pz.x, 3.2, Pz.z, ext);
     box(Pz.w + 0.6, 0.45, Pz.d + 0.6, 0x241947, Pz.x, 6.6, Pz.z, ext);
     box(Pz.w + 0.1, 0.6, Pz.d + 0.1, 0x6c6480, Pz.x, 0.3, Pz.z, ext);
@@ -1574,10 +1596,8 @@ function bonsaBoot() {
     door(Pz, 0x241947);
     var psg = signPlane('플레이존', 1.25, { fs: 110, bg: '#ff5fa2', padX: 34, padY: 6 });
     psg.position.set(Pz.x, 5.25, fz + 0.3); ext.add(psg);
-    ext.traverse(function (o) { if (o.isMesh && !o.userData.ns) { o.castShadow = !o.userData.rcv; o.receiveShadow = true; } });
-    mergeStatic(ext, true);
 
-    // 삼산·성남 가운데: 마을 엘리베이터, 분수, 마을 이름 간판
+    // 게임마을 가운데: 마을 엘리베이터, 분수, 마을 이름 간판
     var B = W.BOOTH;
     box(3.4, 0.3, 3.4, 0x6b7480, B.x, 0.15, B.z, vill);
     [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(function (q) { box(0.22, 3.8, 0.22, 0x39424f, B.x + q[0] * 1.55, 2.05, B.z + q[1] * 1.55, vill); });
@@ -1600,50 +1620,67 @@ function bonsaBoot() {
     var S = W.VSIGN;
     [-3.9, 3.9].forEach(function (dx) { box(0.3, 4.2, 0.3, 0x6b4a32, S.x + dx, 2.1, S.z, vill); });
     box(8.4, 1.9, 0.3, 0x6b4a32, S.x, 3.4, S.z, vill);
-    ['sa', 'sn'].forEach(function (v) {
-      var sg = signPlane(vName(v), 1.5, { fs: 120, bg: '#f3e6cf', color: '#4a3222', padX: 40, padY: 6 });
-      sg.position.set(S.x, 3.4, S.z + 0.17); sg.visible = false; vill.add(sg);
-      var sb = signPlane(vName(v), 1.5, { fs: 120, bg: '#f3e6cf', color: '#4a3222', padX: 40, padY: 6 });
-      sb.position.set(S.x, 3.4, S.z - 0.17); sb.rotation.y = Math.PI; sb.visible = false; vill.add(sb);
-      villSigns[v] = [sg, sb];
+    [1, -1].forEach(function (sd) {
+      var sg = signPlane('🎮 ' + vName('gm'), 1.5, { fs: 120, bg: '#ff5fa2', color: '#ffffff', padX: 40, padY: 6 });
+      sg.position.set(S.x, 3.4, S.z + sd * 0.17); if (sd < 0) sg.rotation.y = Math.PI; vill.add(sg);
     });
-    vill.traverse(function (o) { if (o.isMesh && !o.userData.ns && !o.userData.dyn) { o.castShadow = true; o.receiveShadow = true; } });
-    villSigns.sa.concat(villSigns.sn).forEach(function (o) { o.userData.dyn = true; });
+    vill.traverse(function (o) { if (o.isMesh && !o.userData.ns && !o.userData.dyn) { o.castShadow = !o.userData.rcv; o.receiveShadow = true; } });
     mergeStatic(vill, true);
   })();
 
-  // ---- 나무 회사 1층: 가운데 큰 나무와 열매 ----
-  var fruitG = new THREE.Group(); nm1G.add(fruitG);
-  var FRUIT_SLOTS = [];
-  (function () {
-    for (var i = 0; i < W.FRUIT_SHOW; i++) {                          // 잎 덩어리 아랫면과 옆면을 고르게 돌아가며
-      var a = i * 2.39996, ring = i % 3, r = [2.5, 2.9, 3.2][ring], y = [3.0, 3.55, 4.05][ring];
-      FRUIT_SLOTS.push([W.NM_TREE.x + Math.cos(a) * r, y - (i % 2) * 0.25, W.NM_TREE.z + Math.sin(a) * r]);
-    }
-  })();
+  // ---- 열매 나무: 본투비헤븐 1층(큰 나무)과 1~10구역(작은 나무). 열매는 지금 있는 곳의 나무에 단다 ----
+  var fruitG = new THREE.Group(); fruitG.visible = false; scene.add(fruitG);
   var gFruit = new THREE.SphereGeometry(0.2, 14, 10), gStem = new THREE.CylinderGeometry(0.02, 0.02, 0.18, 5);
   var fruitMat = new THREE.MeshPhongMaterial({ color: new THREE.Color(0xd62828).convertSRGBToLinear(), shininess: 80, specular: 0x553333 });
-  var fruits = [];                                                    // { id, name, slot, g }
-  function fruitMesh(f, slot) {
-    var g = new THREE.Group(), p = FRUIT_SLOTS[slot];
+  var fruits = [];                                                    // { id, name, f, slot, g }
+  function treeSlots() {                                               // 잎 덩어리 아랫면과 옆면을 고르게 돌아가며
+    var T = W.treePos(area), s0 = area === 'nm1_mu' ? TREE_S.nm1 : TREE_S.floor, out = [];
+    for (var i = 0; i < W.FRUIT_SHOW; i++) {
+      var a = i * 2.39996, ring = i % 3, r = [2.5, 2.9, 3.2][ring] * s0, y = ([3.0, 3.55, 4.05][ring] - (i % 2) * 0.25) * s0;
+      out.push([T.x + Math.cos(a) * r, y, T.z + Math.sin(a) * r]);
+    }
+    return out;
+  }
+  function buildTree(g, T, s0, label) {
+    var ring = new THREE.Mesh(new THREE.CylinderGeometry(1.7 * s0, 1.8 * s0, 0.45 * s0, 24), mat(0xa39983)); ring.position.set(T.x, 0.22 * s0, T.z); g.add(ring);
+    var soil = new THREE.Mesh(new THREE.CylinderGeometry(1.55 * s0, 1.55 * s0, 0.05, 24), mat(0x5b4636)); soil.position.set(T.x, 0.45 * s0, T.z); g.add(soil);
+    var trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.5 * s0, 0.85 * s0, 3.4 * s0, 12), mat(0x6b4c33)); trunk.position.set(T.x, 1.9 * s0, T.z); g.add(trunk);
+    [0, 2.1, 4.2].forEach(function (a) {
+      var br = new THREE.Mesh(new THREE.CylinderGeometry(0.12 * s0, 0.25 * s0, 1.9 * s0, 8), mat(0x6b4c33));
+      br.position.set(T.x + Math.cos(a) * 0.7 * s0, 3.5 * s0, T.z + Math.sin(a) * 0.7 * s0); br.rotation.set(Math.sin(a) * 0.7, 0, -Math.cos(a) * 0.7); g.add(br);
+    });
+    var gL = new THREE.IcosahedronGeometry(1, 1);
+    [[0, 4.6, 0, 2.2], [1.9, 4.2, 0.6, 1.6], [-1.8, 4.3, -0.5, 1.6], [0.5, 4.2, -1.9, 1.5], [-0.6, 4.1, 1.9, 1.5],
+      [1.4, 4.9, -1.2, 1.2], [-1.3, 5.0, 1.1, 1.2], [2.3, 3.9, -1.2, 1.1], [-2.2, 3.9, 1.3, 1.1]].forEach(function (c, k) {
+      var m = new THREE.Mesh(gL, mat([0x3f803b, 0x4d9042, 0x58994a, 0x467f3c][k % 4]));
+      m.scale.set(c[3] * s0, c[3] * 0.75 * s0, c[3] * s0); m.position.set(T.x + c[0] * s0, Math.min(c[1], 5.2) * s0, T.z + c[2] * s0); m.rotation.set(k, k * 2, 0); g.add(m);
+    });
+    var tl = labelSprite(label, 0.34, { bg: 'rgba(63,143,78,0.92)', fs: 44 });
+    tl.position.set(T.x, 1.25 * Math.max(s0, 0.9), T.z + 2.2 * s0); g.add(tl);
+  }
+  function fruitMesh(f, slot, slots) {
+    var g = new THREE.Group(), p = slots[slot];
     g.position.set(p[0], p[1], p[2]);
     var b = new THREE.Mesh(gFruit, fruitMat); g.add(b);
     var st = new THREE.Mesh(gStem, mat(0x5b3a1e)); st.position.y = 0.24; g.add(st);
     var lf = new THREE.Mesh(new THREE.SphereGeometry(0.08, 6, 4), mat(0x3f8f4e)); lf.scale.set(1.6, 0.4, 0.8); lf.position.set(0.08, 0.3, 0); g.add(lf);
-    var lb = labelSprite(f[1], 0.24, { bg: 'rgba(255,255,255,0.9)', color: '#7a1f1f', fs: 44, padX: 14, padY: 6 });
+    var lb = labelSprite(f[1] + (f[2] ? ' 🙏' : ''), 0.24, { bg: 'rgba(255,255,255,0.9)', color: '#7a1f1f', fs: 44, padX: 14, padY: 6 });
     lb.position.y = -0.36; g.add(lb);
     fruitG.add(g);
-    return { id: f[0], name: f[1], slot: slot, g: g };
+    return { id: f[0], name: f[1], f: f, slot: slot, g: g };
   }
   function dropFruit(fr) { fruitG.remove(fr.g); fr.g.children.forEach(function (c) { if (c.isSprite) dropSprite(c); }); }
   function setFruits(list) {                                          // list: 최근 것부터
     fruits.forEach(dropFruit); fruits = [];
-    (list || []).slice(0, W.FRUIT_SHOW).reverse().forEach(function (f, i) { fruits.push(fruitMesh(f, i)); });
+    fruitG.visible = !!W.treePlace(area);
+    if (!fruitG.visible) return;
+    var slots = treeSlots();
+    (list || []).slice(0, W.FRUIT_SHOW).reverse().forEach(function (f, i) { fruits.push(fruitMesh(f, i, slots)); });
   }
   function addFruit(f) {
     var slot = fruits.length;
     if (fruits.length >= W.FRUIT_SHOW) { var old = fruits.shift(); slot = old.slot; dropFruit(old); }   // 가장 오래된 열매가 떨어진다
-    var fr = fruitMesh(f, slot); fr.g.scale.setScalar(0.01); fr.grow = 0; fruits.push(fr);
+    var fr = fruitMesh(f, slot, treeSlots()); fr.g.scale.setScalar(0.01); fr.grow = 0; fruits.push(fr);
   }
   (function buildNm1() {
     roomShell(nm1G, texMat(tileTex('#c9a27a', '#b88f66', LW / 3, LD / 3)), 0xf4ead8, 0xeadcc4, true);
@@ -1651,22 +1688,7 @@ function bonsaBoot() {
     box(3.4, 3.4, 0.2, 0x6b4a32, 0, 1.7, LD / 2 - 0.05, nm1G);
     box(1.4, 3.0, 0.06, 0x9fd0ee, -0.72, 1.5, LD / 2 - 0.16, nm1G); box(1.4, 3.0, 0.06, 0x9fd0ee, 0.72, 1.5, LD / 2 - 0.16, nm1G);
     // 큰 나무: 돌 화단, 굵은 줄기, 넓게 퍼진 잎
-    var T = W.NM_TREE;
-    var ring = new THREE.Mesh(new THREE.CylinderGeometry(1.7, 1.8, 0.45, 24), mat(0xa39983)); ring.position.set(T.x, 0.22, T.z); nm1G.add(ring);
-    var soil = new THREE.Mesh(new THREE.CylinderGeometry(1.55, 1.55, 0.05, 24), mat(0x5b4636)); soil.position.set(T.x, 0.45, T.z); nm1G.add(soil);
-    var trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.85, 3.4, 12), mat(0x6b4c33)); trunk.position.set(T.x, 1.9, T.z); nm1G.add(trunk);
-    [0, 2.1, 4.2].forEach(function (a) {
-      var br = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.25, 1.9, 8), mat(0x6b4c33));
-      br.position.set(T.x + Math.cos(a) * 0.7, 3.5, T.z + Math.sin(a) * 0.7); br.rotation.set(Math.sin(a) * 0.7, 0, -Math.cos(a) * 0.7); nm1G.add(br);
-    });
-    var gL = new THREE.IcosahedronGeometry(1, 1);
-    [[0, 4.6, 0, 2.2], [1.9, 4.2, 0.6, 1.6], [-1.8, 4.3, -0.5, 1.6], [0.5, 4.2, -1.9, 1.5], [-0.6, 4.1, 1.9, 1.5],
-      [1.4, 4.9, -1.2, 1.2], [-1.3, 5.0, 1.1, 1.2], [2.3, 3.9, -1.2, 1.1], [-2.2, 3.9, 1.3, 1.1]].forEach(function (c, k) {
-      var m = new THREE.Mesh(gL, mat([0x3f803b, 0x4d9042, 0x58994a, 0x467f3c][k % 4]));
-      m.scale.set(c[3], c[3] * 0.75, c[3]); m.position.set(T.x + c[0], Math.min(c[1], 5.2), T.z + c[2]); m.rotation.set(k, k * 2, 0); nm1G.add(m);
-    });
-    var tl = labelSprite('나무에 다가가 이름을 적으면 열매가 맺혀요', 0.36, { bg: 'rgba(63,143,78,0.92)', fs: 44 });
-    tl.position.set(T.x, 1.25, T.z + 2.2); nm1G.add(tl);
+    buildTree(nm1G, W.NM_TREE, TREE_S.nm1, '이름과 기도문을 적으면 열매가 맺혀요 · 열매를 누르면 기도문');
     // 열매 기록판, 출입명부 책상, 2층 계단
     var Bd = W.NM_BOARD;
     box(0.2, 2.2, 1.8, 0x6b4a32, Bd.x - 0.5, 1.1, Bd.z, nm1G);
@@ -1674,11 +1696,11 @@ function bonsaBoot() {
     var Bk = W.NM_BOOK;
     box(1.3, 1.0, 0.7, 0x7a5236, Bk.x, 0.5, Bk.z + 0.9, nm1G);
     box(0.7, 0.06, 0.5, 0xf7f3e8, Bk.x, 1.04, Bk.z + 0.85, nm1G);
-    var bkl = labelSprite('출입명부', 0.4, { bg: 'rgba(20,28,40,0.78)', fs: 44 }); bkl.position.set(Bk.x, 1.8, Bk.z + 0.9); nm1G.add(bkl);
+    var bkl = labelSprite('📖 방명록', 0.4, { bg: 'rgba(61,111,181,0.92)', fs: 44 }); bkl.position.set(Bk.x, 1.8, Bk.z + 0.9); nm1G.add(bkl);
     for (var k = 0; k < 6; k++) box(3.0, 0.22, 0.42, 0x8d6a4a, 9.2, 0.11 + k * 0.22, -7.4 - k * 0.3, nm1G);   // 올라가는 계단
     box(0.08, 1.0, 2.0, 0x39424f, 7.7, 1.4, -8.0, nm1G);
     var sl = signPlane('계단 · 2층', 0.5, { fs: 60, bg: '#1c2430', radius: 12 }); sl.position.set(9.2, 3.2, -LD / 2 + 0.17); nm1G.add(sl);
-    var logo = signPlane('나무', 0.9, { fs: 100, bg: '#3f8f4e', padX: 30, padY: 6 }); logo.position.set(-4, 3.6, -LD / 2 + 0.17); nm1G.add(logo);
+    var logo = signPlane(W.BH_NAME, 0.9, { fs: 100, bg: '#3d6fb5', padX: 30, padY: 6 }); logo.position.set(-4, 3.6, -LD / 2 + 0.17); nm1G.add(logo);
     [[-10.8, -7.8], [10.8, 7.8], [-10.8, 7.8]].forEach(function (p) {
       var pot = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.3, 0.7, 12), mat(0xc98b5e)); pot.position.set(p[0], 0.35, p[1]); nm1G.add(pot);
       var pl = new THREE.Mesh(new THREE.IcosahedronGeometry(0.75, 1), mat(0x4c9a55)); pl.scale.y = 1.4; pl.position.set(p[0], 1.5, p[1]); nm1G.add(pl);
@@ -1687,7 +1709,7 @@ function bonsaBoot() {
     mergeStatic(nm1G, false);
   })();
 
-  // ---- 나무 회사 2층: 방석, 단상, 벽 화면, 음악 ----
+  // ---- 본투비헤븐 2층: 방석, 단상, 벽 화면(기도제목), 찬양 영상·음악 ----
   var prayCanvas = document.createElement('canvas'); prayCanvas.width = 1400; prayCanvas.height = 420;
   var prayTex = new THREE.CanvasTexture(prayCanvas); prayTex.encoding = THREE.sRGBEncoding;
   var prayers = [], prayPage = 0, prayFlip = 0;
@@ -1705,10 +1727,10 @@ function bonsaBoot() {
     var g = x.createLinearGradient(0, 0, 0, H0); g.addColorStop(0, '#1d2a44'); g.addColorStop(1, '#0f1626');
     x.fillStyle = g; x.fillRect(0, 0, W0, H0);
     x.textBaseline = 'top';
-    x.fillStyle = '#ffd98a'; x.font = 'bold 50px Maplestory, sans-serif'; x.fillText('✦ 함께 기도해요', 40, 22);
+    x.fillStyle = '#ffd98a'; x.font = 'bold 50px Maplestory, sans-serif'; x.fillText('✦ 기도제목', 40, 22);
     x.fillStyle = 'rgba(255,255,255,0.55)'; x.font = '28px Maplestory, sans-serif';
-    x.textAlign = 'right'; x.fillText('방석에 앉으면 글을 쓸 수 있어요', W0 - 40, 36); x.textAlign = 'left';
-    if (!prayers.length) { x.fillStyle = 'rgba(255,255,255,0.75)'; x.font = '42px Maplestory, sans-serif'; x.fillText('아직 올라온 글이 없습니다.', 40, 170); prayTex.needsUpdate = true; return; }
+    x.textAlign = 'right'; x.fillText('방석에 앉으면 기도제목을 쓸 수 있어요', W0 - 40, 36); x.textAlign = 'left';
+    if (!prayers.length) { x.fillStyle = 'rgba(255,255,255,0.75)'; x.font = '42px Maplestory, sans-serif'; x.fillText('아직 올라온 기도제목이 없습니다.', 40, 170); prayTex.needsUpdate = true; return; }
     var per = 3, pages = Math.ceil(prayers.length / per), list = prayers.slice((prayPage % pages) * per, (prayPage % pages) * per + per), y = 104;
     list.forEach(function (p) {
       x.font = '42px Maplestory, sans-serif';
@@ -1814,11 +1836,12 @@ function bonsaBoot() {
   var nm1Spots = [
     { x: W.NM_TREE.x, z: W.NM_TREE.z + 2.4, r: 3.4, label: '열매 맺기', run: function () { openFruit(); } },
     { x: W.NM_BOARD.x + 0.6, z: W.NM_BOARD.z, r: 1.6, label: '열매 기록 보기', run: function () { openFruitLog(); } },
-    { x: W.NM_BOOK.x, z: W.NM_BOOK.z, r: 1.7, label: '출입명부 보기', run: function () { sendMsg({ t: 'entries' }); } },
+    { x: W.NM_BOOK.x, z: W.NM_BOOK.z, r: 1.9, label: '방명록 쓰기·보기', run: function () { openGuest(); } },
     { x: W.NM_STAIRS1.x, z: W.NM_STAIRS1.z, r: 1.9, label: '2층으로 올라가기', run: function () { sendMsg({ t: 'stairs' }); } }
   ];
   var nm2Spots = [
-    { x: W.NM_STAIRS2.x, z: W.NM_STAIRS2.z, r: 1.9, label: '1층으로 내려가기', run: function () { sendMsg({ t: 'stairs' }); } }
+    { x: W.NM_STAIRS2.x, z: W.NM_STAIRS2.z, r: 1.9, label: '1층으로 내려가기', run: function () { sendMsg({ t: 'stairs' }); } },
+    { x: 0, z: -6.4, r: 2.2, label: '기도제목 모두 보기', run: function () { openPrays(); } }
   ];
   var pzSpots = W.CABINETS.map(function (c) {
     return { x: c.x, z: -6.3, r: 1.5, label: W.GAMES[c.g].n + ' 하기', run: function () { openGame(c.g); } };
@@ -1908,10 +1931,10 @@ function bonsaBoot() {
     m.geometry.dispose(); if (m.material.map) m.material.map.dispose(); m.material.dispose();
   }
   var floors = {}, me = { r: 'intern', floor: null };
-  function floorLabel(n) {
-    if (n === 1) return '1층 로비';
-    var f = floors[n], name = f && f.name ? f.name : (n === 12 ? '사장실' : '');
-    return n + '층' + (name ? ' · ' + name : '');
+  function floorLabel(n) {                             // 로비, 1~10구역(2~11층), 사장실(12층)
+    if (n === 1) return '로비';
+    var f = floors[n], name = f && f.name ? f.name : '';
+    return W.floorName(n) + (name && name !== W.floorName(n) ? ' · ' + name : '');
   }
   function refreshFloorSign() {
     dropPlane(floorSign); floorSign = null;
@@ -1964,16 +1987,16 @@ function bonsaBoot() {
   }
 
   /* ---------- 장소 전환 (서버가 허락한 뒤에만 실행) ---------- */
+  var elevNear = true;
   function applyArea(next, x, z) {
-    area = next;
+    area = next; elevNear = true;
     var k = W.kindOf(next), v = W.villageOf(next);
     outdoor.visible = k === 'out'; lobby.visible = k === 'in';
-    hq.visible = next === 'out'; vill.visible = next === 'o_sa' || next === 'o_sn';      // 무거마을엔 본사, 삼산·성남엔 마을 엘리베이터
-    ['sa', 'sn'].forEach(function (vk) { villSigns[vk].forEach(function (o) { o.visible = vk === v; }); });
+    hq.visible = next === 'out'; vill.visible = next === 'o_gm';      // 무거마을엔 본사·본투비헤븐, 게임마을엔 마을 엘리베이터·플레이존
     nm1G.visible = k === 'nm1'; nm2G.visible = k === 'nm2'; pzG.visible = k === 'pz';
     ceo.visible = next === 'f12'; office.visible = k === 'floor' && next !== 'f12';
     furnGroup.visible = ceo.visible || office.visible;
-    skyGroup.visible = k !== 'in';                                 // 사무실·나무 회사·플레이존에서도 창밖으로 하늘이 보인다
+    skyGroup.visible = k !== 'in';                                 // 사무실·본투비헤븐·플레이존에서도 창밖으로 하늘이 보인다
     viewGroup.visible = k === 'floor' || k === 'nm1' || k === 'nm2' || k === 'pz';
     viewGroup.position.y = k === 'nm2' ? -4 : k === 'floor' ? -3 * (W.floorOf(next) - 1) : -1;   // 높은 층일수록 바깥 땅이 아래로 (1층 건물도 바닥과 겹치지 않게 조금 아래)
     P.x = x; P.z = z;
@@ -1981,7 +2004,7 @@ function bonsaBoot() {
   }
   function refreshPlace() {
     var n = W.floorOf(area), k = W.kindOf(area), v = vName(W.villageOf(area));
-    var t = n ? floorLabel(n) : k === 'out' ? v : k === 'nm1' ? v + ' · 나무 1층' : k === 'nm2' ? v + ' · 나무 2층' : k === 'pz' ? v + ' · 플레이존' : '';
+    var t = n ? floorLabel(n) : k === 'out' ? v : k === 'nm1' ? W.BH_NAME + ' 1층' : k === 'nm2' ? W.BH_NAME + ' 2층' : k === 'pz' ? v + ' · 플레이존' : '';
     if ($('place').textContent !== t) $('place').textContent = t;
     refreshFloorSign();
   }
@@ -1992,8 +2015,8 @@ function bonsaBoot() {
       closeElev(); closeFinfo(); closeRoster(); closeProf(); closeBoard(); closeMenu(); closeDeco(); closeShop(); closeEvents(); closeVillageUi();
       mySit = false;
       applyArea(next, x, z);
-      if (W.kindOf(next) !== 'nm1') setFruits([]);
-      if (W.kindOf(next) === 'nm2') { bgmStop(); music.idx = -1; musicPlay(); } else { musicStop(); if (playing) bgmStart(); }
+      setFruits([]); bdItems = []; drawBoard3();
+      if (W.kindOf(next) === 'nm2') { bgmStop(); videoOpen(); } else { videoClose(true); musicStop(); if (playing) bgmStart(); }
       setPapers(pins); setFurn(furn);
       P.face = typeof face === 'number' ? face : (next === 'in' ? Math.PI : 0);
       cam.yaw = W.isOut(next) ? Math.PI : 0; cam.pitch = W.isOut(next) ? 0.42 : 0.36;
@@ -2045,7 +2068,7 @@ function bonsaBoot() {
     if (!boardOpen() || !Array.isArray(m.list) || m.b !== curBoard) return;
     var pinned = m.list.filter(function (p) { return p[7]; }).length;
     $('bForm').style.display = (m.w || editId) ? 'block' : 'none';
-    $('bNote').textContent = (m.b === 1 ? '누구나 읽고, 글은 사장과 부장이 씁니다.' : '누구나 읽고, 글은 이 층에 등록한 사원이 씁니다.')
+    $('bNote').textContent = (m.b === 1 ? '누구나 읽고, 글은 사장과 부장이 씁니다.' : '누구나 읽고, 글은 이 구역에 등록한 구역원이 씁니다.')
       + ' 고정한 글은 게시판에 종이로 붙습니다 (' + pinned + '/' + m.cap + ').';
     var box0 = $('posts');
     while (box0.firstChild) box0.removeChild(box0.firstChild);
@@ -2159,11 +2182,12 @@ function bonsaBoot() {
     resize();
   }
   function renderMenu() {
-    $('mnWho').textContent = tagOf(me.r, me.n || '') + (me.floor ? ' · ' + floorLabel(me.floor) + ' 등록' + (repFloorOf(myId) ? ' (★ 대표자)' : '') : ' · 등록한 층 없음') + ' · ' + moneyText();
+    $('mnWho').textContent = tagOf(me.r, me.n || '') + (me.floor ? ' · ' + floorLabel(me.floor) + ' 등록' + (repFloorOf(myId) ? ' (★ 대표자)' : '') : ' · 등록한 구역 없음') + ' · ' + moneyText();
     $('mnBoardF').style.display = me.floor ? '' : 'none';
-    $('mnBoardF').firstChild.nodeValue = me.floor ? floorLabel(me.floor) + ' 게시판' : '내 층 게시판';
+    $('mnBoardF').firstChild.nodeValue = me.floor ? floorLabel(me.floor) + ' 게시판' : '내 구역 게시판';
     $('mnDeco').style.display = typeof canDeco === 'function' && canDeco() ? '' : 'none';
     $('mnBgm').lastChild.textContent = bgm.on ? '켜짐' : '꺼짐';
+    $('mnNotice').textContent = canNotice() ? '한 주 공지 쓰기' : '한 주 공지 보기';
     $('mnQuality').lastChild.textContent = quality === 'low' ? '낮음 (가볍게)' : '보통';
     $('mnFollow').lastChild.textContent = cam.follow ? '켜짐' : '꺼짐';
   }
@@ -2227,34 +2251,67 @@ function bonsaBoot() {
   function modalOpen(id) { return $(id).style.display === 'flex'; }
   function showModal(id) { uiOpen = true; $(id).style.display = 'flex'; }
   function hideModal(id) { if (!modalOpen(id)) return; $(id).style.display = 'none'; uiOpen = false; }
-  ['fruitM', 'fruitLogM', 'entryM', 'prayM', 'rankM'].forEach(function (id) {
+  ['fruitM', 'fruitLogM', 'entryM', 'prayM', 'rankM', 'fruitDetM', 'guestM', 'praysM', 'noticeM', 'noticeEdM', 'bdM'].forEach(function (id) {
     $(id).addEventListener('click', function (e) { if (e.target === $(id) || (e.target.getAttribute && e.target.getAttribute('data-close') === '1')) hideModal(id); });
   });
-  function closeVillageUi() { ['fruitM', 'fruitLogM', 'entryM', 'prayM', 'rankM'].forEach(hideModal); closeGame(true); }
+  function closeVillageUi() { ['fruitM', 'fruitLogM', 'entryM', 'prayM', 'rankM', 'fruitDetM', 'guestM', 'praysM', 'noticeEdM', 'bdM'].forEach(hideModal); closeGame(true); }
   function timeText(ms) {
     var d = new Date(ms + 9 * 3600000);
     return (d.getUTCMonth() + 1) + '/' + d.getUTCDate() + ' ' + ('0' + d.getUTCHours()).slice(-2) + ':' + ('0' + d.getUTCMinutes()).slice(-2);
   }
+  function placeShort(a) {
+    var n = W.floorOf(a), k = W.kindOf(a);
+    if (n) return W.floorName(n);
+    if (k === 'out') return vName(W.villageOf(a));
+    if (k === 'nm1' || k === 'nm2') return W.BH_NAME;
+    if (k === 'pz') return '플레이존';
+    return '';
+  }
   function placeName(a) {
     var k = W.kindOf(a), v = W.villageOf(a);
     if (a === 'in') return '본사';
-    if (k === 'nm1') return vName(v) + ' 나무 1층';
-    if (k === 'nm2') return vName(v) + ' 나무 2층';
+    if (k === 'nm1') return W.BH_NAME + ' 1층';
+    if (k === 'nm2') return W.BH_NAME + ' 2층';
     if (k === 'pz') return vName(v) + ' 플레이존';
     return a;
   }
-  // 열매 맺기
+  // 열매 맺기: 기도할 사람의 이름과 기도문
   function openFruit() {
-    if (!playing || uiOpen) return;
-    $('fruitName').value = ''; $('fruitName').placeholder = me.n || '이름';
+    if (!playing || uiOpen || !W.treePlace(area)) return;
+    $('fruitName').value = ''; $('fruitPr').value = '';
+    var box0 = $('fruitNow'); clear(box0);
+    fruits.slice().reverse().slice(0, 20).forEach(function (fr) {           // 지금 달린 열매: 누르면 기도문
+      var b = document.createElement('button'); b.type = 'button'; b.textContent = '🍎 ' + fr.name;
+      b.addEventListener('click', function () { hideModal('fruitM'); openFruitDet(fr.id); });
+      box0.appendChild(b);
+    });
     showModal('fruitM'); setTimeout(function () { try { $('fruitName').focus(); } catch (e) {} }, 50);
   }
   $('fruitGo').addEventListener('click', function () {
-    var v = $('fruitName').value.replace(/\s+/g, ' ').trim() || me.n || '';
-    if (!v) return;
-    sendMsg({ t: 'fruit', name: v.slice(0, W.FRUIT_NAME) }); hideModal('fruitM');
+    var v = $('fruitName').value.replace(/\s+/g, ' ').trim(), pr = $('fruitPr').value.replace(/\s+/g, ' ').trim();
+    if (!v) { toast('이름을 적어 주세요.'); return; }
+    sendMsg({ t: 'fruit', name: v.slice(0, W.FRUIT_NAME), pr: pr.slice(0, W.FRUIT_PRAY) }); hideModal('fruitM');
   });
-  $('fruitName').addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); $('fruitGo').click(); } });
+  $('fruitName').addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); $('fruitPr').focus(); } });
+  // 열매 하나: 기도문과 함께 기도한 사람
+  var fdet = null;
+  function openFruitDet(id) {
+    if (!playing || (uiOpen && !modalOpen('fruitLogM'))) return;
+    hideModal('fruitLogM');
+    fdet = { id: id }; $('fdName').textContent = '🍎 …'; $('fdPr').textContent = '불러오는 중…'; $('fdBy').textContent = ''; $('fdWho').textContent = '';
+    $('fdAmen').disabled = true; showModal('fruitDetM'); sendMsg({ t: 'fdet', id: id });
+  }
+  function renderFruitDet(f) {
+    if (!modalOpen('fruitDetM') || !fdet || fdet.id !== f.id) return;
+    fdet = f;
+    $('fdName').textContent = '🍎 ' + f.name;
+    $('fdPr').textContent = f.pr || '(기도문 없이 이름만 맺힌 열매예요)';
+    $('fdBy').textContent = (f.by ? f.by + ' 님이 맺은 열매 · ' : '') + timeText(f.at);
+    $('fdAmen').disabled = !!f.mine;
+    $('fdAmen').textContent = f.mine ? '🙏 함께 기도했어요 (' + f.n + '명)' : '🙏 이 사람을 위해 함께 기도했어요 (' + f.n + '명)';
+    $('fdWho').textContent = f.who && f.who.length ? '함께 기도한 사람: ' + f.who.join(', ') + (f.n > f.who.length ? ' 외 ' + (f.n - f.who.length) + '명' : '') : '아직 함께 기도한 사람이 없어요. 첫 번째로 기도해 주세요.';
+  }
+  $('fdAmen').addEventListener('click', function () { if (fdet && fdet.id) { $('fdAmen').disabled = true; sendMsg({ t: 'amen', id: fdet.id }); } });
   // 열매 기록 (전부 남는다)
   var fruitLog = { page: 0, list: [] };
   function openFruitLog() {
@@ -2263,32 +2320,62 @@ function bonsaBoot() {
     showModal('fruitLogM'); sendMsg({ t: 'fruits', page: 0 });
   }
   $('fruitMore').addEventListener('click', function () { sendMsg({ t: 'fruits', page: fruitLog.page + 1 }); });
+  function treeName() { return area === 'nm1_mu' ? W.BH_NAME : W.floorName(W.floorOf(area)); }
   function renderFruitLog(m) {
     if (!modalOpen('fruitLogM') || !Array.isArray(m.list)) return;
     fruitLog.page = m.page;
     if (m.page === 0) clear($('fruitLogList'));
-    $('fruitLogNote').textContent = vName(W.villageOf(area)) + ' 나무에 지금까지 맺힌 열매 ' + m.total + '개. 나무에는 최근 ' + W.FRUIT_SHOW + '개만 달리고 기록은 모두 남습니다.';
+    $('fruitLogNote').textContent = treeName() + ' 나무에 지금까지 맺힌 열매 ' + m.total + '개. 나무에는 최근 ' + W.FRUIT_SHOW + '개만 달리고 기록은 모두 남습니다. 누르면 기도문을 볼 수 있어요.';
     m.list.forEach(function (f) {
-      var row = document.createElement('div'); row.className = 'lrow';
-      var a = document.createElement('b'); a.textContent = '🍎 ' + f[1];
+      var row = document.createElement('div'); row.className = 'lrow'; row.style.cursor = 'pointer';
+      var a = document.createElement('b'); a.textContent = '🍎 ' + f[1] + (f[4] ? ' 🙏' + (f[5] || '') : '');
       var b = document.createElement('span'); b.textContent = (f[2] ? f[2] + ' · ' : '') + timeText(f[3]);
       row.appendChild(a); row.appendChild(b); $('fruitLogList').appendChild(row);
+      row.addEventListener('click', function () { openFruitDet(f[0]); });
     });
     $('fruitMore').style.display = (m.page + 1) * 50 < m.total ? '' : 'none';
   }
-  // 출입명부
-  function renderEntries(list) {
-    if (!playing) return;
-    clear($('entryList'));
-    $('entryNote').textContent = vName(W.villageOf(area)) + ' 나무 회사(1층·2층)에 들어온 기록입니다. 최근 100건.';
-    if (!list.length) { var e0 = document.createElement('div'); e0.className = 'lrow'; e0.textContent = '아직 기록이 없습니다.'; $('entryList').appendChild(e0); }
+  // 방명록 (본투비헤븐 1층 책상) + 출입명부
+  var gbData = { list: [], entries: [], tab: 1 };
+  function openGuest() {
+    if (!playing || uiOpen) return;
+    $('guestIn').value = ''; gbData.tab = 1; renderGuest();
+    showModal('guestM'); sendMsg({ t: 'gb' });
+  }
+  function renderGuest() {
+    var box0 = $('guestList'); clear(box0);
+    $('gbTab1').className = gbData.tab === 1 ? 'on' : ''; $('gbTab2').className = gbData.tab === 2 ? 'on' : '';
+    var list = gbData.tab === 1 ? gbData.list : gbData.entries;
+    if (!list.length) { var e0 = document.createElement('div'); e0.className = 'lrow'; e0.textContent = '아직 기록이 없습니다.'; box0.appendChild(e0); }
     list.forEach(function (r) {
       var row = document.createElement('div'); row.className = 'lrow';
-      var a = document.createElement('b'); a.textContent = r[0];
-      var b = document.createElement('span'); b.textContent = placeName(r[1]) + ' · ' + timeText(r[2]);
-      row.appendChild(a); row.appendChild(b); $('entryList').appendChild(row);
+      var a = document.createElement('b'), b = document.createElement('span');
+      if (gbData.tab === 1) { a.textContent = r[1] + ' : ' + r[2]; b.textContent = timeText(r[3]); }
+      else { a.textContent = r[0]; b.textContent = placeName(r[1]) + ' · ' + timeText(r[2]); }
+      row.appendChild(a); row.appendChild(b); box0.appendChild(row);
     });
-    if (!uiOpen) showModal('entryM');
+  }
+  $('gbTab1').addEventListener('click', function () { gbData.tab = 1; renderGuest(); });
+  $('gbTab2').addEventListener('click', function () { gbData.tab = 2; renderGuest(); });
+  $('guestGo').addEventListener('click', function () {
+    var v = $('guestIn').value.replace(/\s+/g, ' ').trim();
+    if (!v) { toast('남길 말을 써 주세요.'); return; }
+    sendMsg({ t: 'gb_add', m: v.slice(0, W.GUEST_LEN) }); $('guestIn').value = '';
+  });
+  $('guestIn').addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); $('guestGo').click(); } });
+  function renderEntries(list) { gbData.entries = list; if (modalOpen('guestM')) renderGuest(); }
+  // 기도제목 모두 보기
+  function openPrays() { if (!playing || uiOpen) return; clear($('praysList')); $('praysList').textContent = '불러오는 중…'; showModal('praysM'); sendMsg({ t: 'prays' }); }
+  function renderPrays(list) {
+    if (!modalOpen('praysM')) return;
+    var box0 = $('praysList'); clear(box0);
+    if (!list.length) box0.textContent = '아직 올라온 기도제목이 없습니다.';
+    list.forEach(function (r) {
+      var row = document.createElement('div'); row.className = 'lrow';
+      var a = document.createElement('b'); a.textContent = r[1] + ' : ' + r[2];
+      var b = document.createElement('span'); b.textContent = timeText(r[3]);
+      row.appendChild(a); row.appendChild(b); box0.appendChild(row);
+    });
   }
   // 2층: 방석에 앉으면 글 쓰기
   function openPray() {
@@ -2436,6 +2523,8 @@ function bonsaBoot() {
     b.appendChild(el2('div', 'gHuge', sc));
     if (m.best !== undefined) b.appendChild(el2('div', 'gNote', (m.newBest ? '이번 주 최고 기록! ' : '') + '이번 주 내 최고 ' + fmtScore(m.g, m.best) + ' · 현재 ' + m.rank + '위'));
     else b.appendChild(el2('div', 'gNote', '기록은 1점 이상(1~25는 끝까지)일 때 남습니다.'));
+    if (m.coin > 0) b.appendChild(el2('div', 'gNote gCoin', '🪙 +' + m.coin + '코인'));
+    else if (m.coin === -1) b.appendChild(el2('div', 'gNote', '오늘 받을 수 있는 게임 코인을 모두 받았어요. 내일 또 와요!'));
     var again = el2('button', 'btn gBig', '다시 하기'); again.type = 'button'; again.addEventListener('click', gCountdown); b.appendChild(again);
   }
 
@@ -2450,7 +2539,7 @@ function bonsaBoot() {
     return { i: 0, t: 0 };
   }
   function musicPlay() {
-    if (!music.on || W.kindOf(area) !== 'nm2' || !playing) return;
+    if (!music.on || W.kindOf(area) !== 'nm2' || !playing || (video.open && !video.fb)) return;
     if (!music.el) {
       music.el = new Audio(); music.el.preload = 'auto'; music.el.volume = 0.8;
       music.el.addEventListener('ended', function () { music.idx = -1; musicPlay(); });
@@ -2465,8 +2554,9 @@ function bonsaBoot() {
   }
   function musicStop() { if (music.el) { music.el.pause(); } musicUi(); }
   function musicUi() {
-    var show = W.kindOf(area) === 'nm2' && playing;
+    var show = W.kindOf(area) === 'nm2' && playing && (!video.open || video.fb);
     $('musicBtn').style.display = show ? 'block' : 'none';
+    $('videoBtn').style.display = W.kindOf(area) === 'nm2' && playing && !video.open ? 'block' : 'none';
     if (show) $('musicBtn').textContent = music.on && music.el && !music.el.paused ? '♪ 음악 끄기' : '♪ 음악 켜기';
   }
   $('musicBtn').addEventListener('click', function () {
@@ -2485,12 +2575,12 @@ function bonsaBoot() {
     W.VKEYS.forEach(function (v) {
       var b = document.createElement('button'); b.type = 'button';
       b.appendChild(document.createTextNode(vName(v)));
-      var sp = document.createElement('span'); sp.textContent = v === here ? '지금 마을' : v === 'mu' ? '본사 1층 로비' : '마을 엘리베이터';
+      var sp = document.createElement('span'); sp.textContent = v === here ? '지금 마을' : v === 'mu' ? '본사 로비' : '플레이존 · 마을 엘리베이터';
       b.appendChild(sp);
       if (v === here) { b.className = 'here'; b.disabled = true; }
       b.setAttribute('data-v', v); box0.appendChild(b);
     });
-    var canTravel = area === 'in' || area === 'o_sa' || area === 'o_sn';
+    var canTravel = area === 'in' || area === 'o_gm';
     $('villRow').style.display = canTravel ? '' : 'none';
     $('floorBox').style.display = W.floorOf(area) ? '' : 'none';
   }
@@ -2502,10 +2592,21 @@ function bonsaBoot() {
   function villageMsg(m) {
     switch (m.t) {
       case 'fruitset': setFruits(m.list); return true;
-      case 'fruitnew': if (W.kindOf(area) === 'nm1') addFruit(m.f); if (m.by) logLine('🍎 ' + m.by + ' 님이 "' + m.f[1] + '" 열매를 맺었습니다.', true); return true;
+      case 'fruitnew': if (W.treePlace(area)) addFruit(m.f); if (m.by) logLine('🍎 ' + m.by + ' 님이 "' + m.f[1] + '" 열매를 맺었습니다.', true); return true;
       case 'fruitlog': renderFruitLog(m); return true;
+      case 'fdet': if (m.f) renderFruitDet(m.f); return true;
+      case 'amen':
+        fruits.forEach(function (fr) { if (fr.id === m.id) fr.f[4] = m.n; });
+        if (m.by && m.by !== me.n) { var af = fruits.filter(function (fr) { return fr.id === m.id; })[0]; logLine('🙏 ' + m.by + ' 님이 ' + (af ? '"' + af.name + '"' : '') + ' 열매를 위해 함께 기도했습니다.', true); }
+        return true;
       case 'entries': renderEntries(m.list || []); return true;
-      case 'prayset': prayers = m.list || []; prayPage = 0; drawPray(); return true;
+      case 'gb': gbData.list = m.list || []; gbData.entries = m.entries || []; if (modalOpen('guestM')) renderGuest(); return true;
+      case 'prays': renderPrays(m.list || []); return true;
+      case 'prayset': prayers = m.list || []; prayPage = 0; drawPray(); if (m.praise) setPraise(m.praise); return true;
+      case 'praise': setPraise(m.praise); return true;
+      case 'wnotice': wnotice = m.n || { m: '' }; if (m.pop && wnotice.m) showNotice(true); return true;
+      case 'attend': toast('출석 보상 ' + m.n + '코인을 받았습니다! 오늘도 반가워요.'); logLine('✅ 오늘 출석 +' + m.n + '코인', true); return true;
+      case 'bdset': bdItems = m.list || []; drawBoard3(); if (modalOpen('bdM')) drawBd(); return true;
       case 'praynew': prayers.unshift(m.it); prayers = prayers.slice(0, 30); prayPage = 0; prayFlip = 0; drawPray(); return true;
       case 'ranks': ranks = m; drawRanks(); if (modalOpen('rankM')) renderRanks(); return true;
       case 'g': gIn(m); return true;
@@ -2522,6 +2623,256 @@ function bonsaBoot() {
     if (env.spray && vill.visible) { env.spray.scale.y = 1 + Math.sin(t * 6) * 0.08; env.spray.rotation.y += dt; }
     $('prayBtn').style.display = W.kindOf(area) === 'nm2' && mySit && !uiOpen && playing ? 'block' : 'none';
   }
+
+  /* ---------- 한 주 공지: 접속하면 10초 동안 화면 가운데에. 총관리자·사장·부장이 쓴다 ---------- */
+  var wnotice = { m: '' }, noticeTimer = 0, noticeShown = false;
+  function canNotice() { return me.r === 'owner' || me.r === 'ceo' || me.r === 'manager'; }
+  function showNotice(auto) {
+    if (!wnotice || !wnotice.m) { if (!auto) toast('지금 올라온 한 주 공지가 없습니다.'); return; }
+    if (uiOpen && !modalOpen('noticeM')) { if (auto) logLine('📢 한 주 공지: ' + wnotice.m.replace(/\s+/g, ' ').slice(0, 60), true); return; }
+    $('ntText').textContent = wnotice.m;
+    $('ntBy').textContent = (wnotice.by ? wnotice.by + ' · ' : '') + (wnotice.at ? timeText(wnotice.at) : '');
+    showModal('noticeM');
+    clearInterval(noticeTimer); $('ntLeft').textContent = '';
+    if (!auto) return;
+    var left = 10;
+    $('ntLeft').textContent = left + '초 뒤에 닫혀요';
+    noticeTimer = setInterval(function () {
+      left--;
+      if (!modalOpen('noticeM')) { clearInterval(noticeTimer); return; }
+      if (left <= 0) { clearInterval(noticeTimer); hideModal('noticeM'); return; }
+      $('ntLeft').textContent = left + '초 뒤에 닫혀요';
+    }, 1000);
+  }
+  function openNoticeEd() {
+    if (!playing || uiOpen) return;
+    $('neText').value = wnotice.m || ''; neCount(); showModal('noticeEdM');
+  }
+  function neCount() { $('neCount').textContent = $('neText').value.length + ' / ' + W.NOTICE_LEN; }
+  $('neText').addEventListener('input', neCount);
+  $('neGo').addEventListener('click', function () { sendMsg({ t: 'wnotice', m: $('neText').value.slice(0, W.NOTICE_LEN) }); hideModal('noticeEdM'); });
+  $('mnNotice').addEventListener('click', function () { closeMenu(); if (canNotice()) openNoticeEd(); else showNotice(false); });
+
+  /* ---------- 전도 게시판 (1~10구역): 메모·스티커·사진. 구역원이 붙이고, 붙인 사람은 끌어서 옮긴다 ---------- */
+  var bd = { sel: 0, drag: null, color: 0, busy: false };
+  var BD_W = 1400, BD_H = 700;
+  function bdImg(pid) {
+    var im = bdPhotos[pid];
+    if (!im) {
+      im = bdPhotos[pid] = new Image();
+      im.onload = function () { drawBoard3(); if (modalOpen('bdM')) drawBd(); };
+      im.src = '/photo/' + pid;
+    }
+    return im.complete && im.naturalWidth ? im : null;
+  }
+  function bdSize(it) {                                  // 판 위에서 차지하는 크기 (픽셀)
+    if (it[1] === 'memo') return { w: 230, h: 180 };
+    if (it[1] === 'stk') return { w: 130, h: 130 };
+    var im = bdImg(it[8]), ar = im ? im.naturalWidth / im.naturalHeight : 4 / 3, w = 290, h = Math.max(170, Math.min(330, w / ar));
+    return { w: w + 20, h: h + (it[6] ? 52 : 24) };
+  }
+  function drawBoardTo(cv, items, sel) {
+    var x = cv.getContext('2d');
+    var g = x.createLinearGradient(0, 0, BD_W, BD_H); g.addColorStop(0, '#c99a66'); g.addColorStop(1, '#b07f4c');
+    x.fillStyle = g; x.fillRect(0, 0, BD_W, BD_H);
+    x.fillStyle = 'rgba(80,50,20,0.16)';
+    for (var i = 0; i < 260; i++) { var px = (i * 397) % BD_W, py = (i * 211 + (i % 7) * 53) % BD_H; x.fillRect(px, py, 3, 3); }
+    x.textBaseline = 'top'; x.textAlign = 'left';
+    x.fillStyle = 'rgba(255,255,255,0.92)'; x.font = 'bold 44px Maplestory, sans-serif';
+    x.fillText('✝ ' + floorLabel(W.floorOf(area) || 2) + ' 전도 게시판', 30, 22);
+    if (!items.length) {
+      x.fillStyle = 'rgba(255,255,255,0.8)'; x.font = '38px Maplestory, sans-serif'; x.textAlign = 'center';
+      x.fillText('구역원들이 메모·스티커·사진으로 꾸며요', BD_W / 2, BD_H / 2 - 20); x.textAlign = 'left';
+    }
+    items.forEach(function (it) {
+      var sz = bdSize(it), cx = it[2] * BD_W, cy = it[3] * BD_H;
+      x.save(); x.translate(cx, cy); x.rotate(it[4] || 0);
+      x.shadowColor = 'rgba(0,0,0,0.3)'; x.shadowBlur = 10; x.shadowOffsetY = 4;
+      if (it[1] === 'memo') {
+        x.fillStyle = W.BOARD.colors[it[5]] || W.BOARD.colors[0]; x.fillRect(-sz.w / 2, -sz.h / 2, sz.w, sz.h);
+        x.shadowColor = 'transparent';
+        x.fillStyle = '#2b2b2b'; x.font = '30px Maplestory, sans-serif';
+        wrapText(x, it[6], sz.w - 30).slice(0, 4).forEach(function (ln, k) { x.fillText(ln, -sz.w / 2 + 15, -sz.h / 2 + 24 + k * 36); });
+        x.fillStyle = 'rgba(0,0,0,0.45)'; x.font = '20px Maplestory, sans-serif'; x.textAlign = 'right';
+        x.fillText(it[9] || '', sz.w / 2 - 10, sz.h / 2 - 28); x.textAlign = 'left';
+        x.fillStyle = '#d62828'; x.beginPath(); x.arc(0, -sz.h / 2 + 8, 9, 0, Math.PI * 2); x.fill();
+      } else if (it[1] === 'stk') {
+        x.shadowColor = 'transparent';
+        x.font = '110px sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle';
+        x.fillText(W.BOARD.stickers[it[7]] || '⭐', 0, 4);
+      } else {
+        x.fillStyle = '#ffffff'; x.fillRect(-sz.w / 2, -sz.h / 2, sz.w, sz.h);
+        x.shadowColor = 'transparent';
+        var im = bdImg(it[8]), iw = sz.w - 20, ih = sz.h - (it[6] ? 52 : 24);
+        if (im) x.drawImage(im, -sz.w / 2 + 10, -sz.h / 2 + 10, iw, ih);
+        else { x.fillStyle = '#d9dde3'; x.fillRect(-sz.w / 2 + 10, -sz.h / 2 + 10, iw, ih); }
+        if (it[6]) { x.fillStyle = '#333'; x.font = '24px Maplestory, sans-serif'; x.fillText(it[6], -sz.w / 2 + 12, sz.h / 2 - 38); }
+        x.fillStyle = 'rgba(255,255,255,0.7)'; x.fillRect(-36, -sz.h / 2 - 10, 72, 22);         // 테이프
+      }
+      if (sel && it[0] === sel) { x.strokeStyle = '#2f6fed'; x.lineWidth = 6; x.setLineDash([14, 10]); x.strokeRect(-sz.w / 2 - 8, -sz.h / 2 - 8, sz.w + 16, sz.h + 16); x.setLineDash([]); }
+      x.restore();
+    });
+  }
+  function drawBoard3() { if (W.floorOf(area) < 2 || W.floorOf(area) > 11) return; drawBoardTo(bdCanvas3, bdItems, 0); bdTex.needsUpdate = true; }
+  function bdHigh() { return me.r === 'owner' || me.r === 'ceo' || me.r === 'manager'; }
+  function bdCanAdd() { var n = W.floorOf(area); return me.floor === n || bdHigh(); }
+  function bdCanEdit(it) { var n = W.floorOf(area); return it[10] === myId || bdHigh() || (floors[n] && floors[n].rep === myId); }
+  function bdFind(id) { for (var i = 0; i < bdItems.length; i++) if (bdItems[i][0] === id) return bdItems[i]; return null; }
+  function drawBd() {
+    drawBoardTo($('bdCanvas'), bdItems, bd.sel);
+    var it = bd.sel ? bdFind(bd.sel) : null;
+    if (!it) { bd.sel = 0; $('bdSel').style.display = 'none'; return; }
+    $('bdSel').style.display = 'flex';
+    $('bdSelText').textContent = (it[9] || '누군가') + ' 님이 붙인 ' + ({ memo: '메모', stk: '스티커', photo: '사진' })[it[1]] + (bdCanEdit(it) ? ' · 끌어서 옮길 수 있어요' : '');
+    $('bdDel').style.display = bdCanEdit(it) ? '' : 'none';
+  }
+  function openBd() {
+    var n = W.floorOf(area);
+    if (!playing || uiOpen || n < 2 || n > 11) return;
+    bd.sel = 0; bd.drag = null;
+    $('bdTitle').textContent = '✝ ' + floorLabel(n) + ' 전도 게시판';
+    $('bdNote').textContent = bdCanAdd() ? '메모·스티커·사진을 붙여 꾸며요. 내가 붙인 것은 끌어서 옮기고, 눌러서 뗄 수 있어요. (최대 ' + W.BOARD.max + '개, 사진 ' + W.BOARD.photos + '장)'
+      : '이 구역에 등록한 구역원만 꾸밀 수 있어요. 구경은 누구나 할 수 있어요.';
+    $('bdTools').style.display = bdCanAdd() ? 'flex' : 'none';
+    $('bdMemo').style.display = 'none'; $('bdStk').style.display = 'none';
+    showModal('bdM'); drawBd();
+  }
+  function bdPos() { return { x: 0.14 + Math.random() * 0.72, y: 0.32 + Math.random() * 0.5, rot: (Math.random() - 0.5) * 0.24 }; }
+  (function () {
+    var cb = $('bdColors');
+    W.BOARD.colors.forEach(function (c, i) {
+      var b = document.createElement('button'); b.type = 'button'; b.className = 'cl' + (i === 0 ? ' sel' : ''); b.style.background = c;
+      b.addEventListener('click', function () { bd.color = i; Array.prototype.forEach.call(cb.children, function (x, k) { x.className = 'cl' + (k === i ? ' sel' : ''); }); });
+      cb.appendChild(b);
+    });
+    var sg = $('bdStk');
+    W.BOARD.stickers.forEach(function (e, i) {
+      var b = document.createElement('button'); b.type = 'button'; b.textContent = e;
+      b.addEventListener('click', function () { var p0 = bdPos(); sendMsg({ t: 'bd_add', k: 'stk', s: i, x: p0.x, y: p0.y, rot: p0.rot }); sg.style.display = 'none'; });
+      sg.appendChild(b);
+    });
+  })();
+  $('bdMemoBtn').addEventListener('click', function () { $('bdStk').style.display = 'none'; $('bdMemo').style.display = $('bdMemo').style.display === 'none' ? 'block' : 'none'; });
+  $('bdStkBtn').addEventListener('click', function () { $('bdMemo').style.display = 'none'; $('bdStk').style.display = $('bdStk').style.display === 'none' ? 'grid' : 'none'; });
+  $('bdMemoGo').addEventListener('click', function () {
+    var v = $('bdMemoIn').value.replace(/\s+/g, ' ').trim();
+    if (!v) { toast('메모 내용을 써 주세요.'); return; }
+    var p0 = bdPos(); sendMsg({ t: 'bd_add', k: 'memo', m: v.slice(0, W.BOARD.memo), c: bd.color, x: p0.x, y: p0.y, rot: p0.rot });
+    $('bdMemoIn').value = ''; $('bdMemo').style.display = 'none';
+  });
+  $('bdDel').addEventListener('click', function () { if (bd.sel) { sendMsg({ t: 'bd_del', id: bd.sel }); bd.sel = 0; drawBd(); } });
+  // 사진: 폰 사진을 1000px 이하 JPG로 줄여서 올린 뒤 받은 번호로 붙인다
+  $('bdPhotoBtn').addEventListener('click', function () { if (!bd.busy) $('bdFile').click(); });
+  $('bdFile').addEventListener('change', function () {
+    var file = this.files && this.files[0]; this.value = '';
+    if (!file || !/^image\//.test(file.type)) return;
+    bd.busy = true; $('bdPhotoBtn').textContent = '📷 올리는 중…';
+    var done = function (msg) { bd.busy = false; $('bdPhotoBtn').textContent = '📷 사진'; if (msg) toast(msg); };
+    var url = URL.createObjectURL(file), im = new Image();
+    im.onerror = function () { URL.revokeObjectURL(url); done('사진을 읽지 못했습니다.'); };
+    im.onload = function () {
+      URL.revokeObjectURL(url);
+      var k = Math.min(1, 1000 / Math.max(im.naturalWidth, im.naturalHeight)), cv = document.createElement('canvas');
+      cv.width = Math.max(1, Math.round(im.naturalWidth * k)); cv.height = Math.max(1, Math.round(im.naturalHeight * k));
+      var cx = cv.getContext('2d'); cx.fillStyle = '#fff'; cx.fillRect(0, 0, cv.width, cv.height); cx.drawImage(im, 0, 0, cv.width, cv.height);
+      var send = function (q) {
+        cv.toBlob(function (blob) {
+          if (!blob) return done('사진을 만들지 못했습니다.');
+          if (blob.size > 440 * 1024 && q > 0.45) return send(q - 0.15);
+          fetch('/api/photo', { method: 'POST', headers: { 'Content-Type': 'image/jpeg', Authorization: 'Bearer ' + token }, body: blob })
+            .then(function (r) { return r.json(); })
+            .then(function (j) {
+              if (!j.ok) return done(j.error || '사진을 올리지 못했습니다.');
+              var p0 = bdPos(); sendMsg({ t: 'bd_add', k: 'photo', pid: j.id, x: p0.x, y: p0.y, rot: p0.rot * 0.6 }); done('');
+            })
+            .catch(function () { done('사진을 올리지 못했습니다.'); });
+        }, 'image/jpeg', q);
+      };
+      send(0.82);
+    };
+    im.src = url;
+  });
+  // 판 위에서 누르기·끌기
+  function bdPoint(e) { var r = $('bdCanvas').getBoundingClientRect(); return { x: (e.clientX - r.left) / r.width * BD_W, y: (e.clientY - r.top) / r.height * BD_H }; }
+  $('bdCanvas').addEventListener('pointerdown', function (e) {
+    var p0 = bdPoint(e), hit = null;
+    for (var i = bdItems.length - 1; i >= 0; i--) {
+      var it = bdItems[i], sz = bdSize(it);
+      if (Math.abs(p0.x - it[2] * BD_W) < sz.w / 2 && Math.abs(p0.y - it[3] * BD_H) < sz.h / 2) { hit = it; break; }
+    }
+    bd.sel = hit ? hit[0] : 0;
+    bd.drag = hit && bdCanEdit(hit) ? { id: hit[0], dx: p0.x - hit[2] * BD_W, dy: p0.y - hit[3] * BD_H, moved: false } : null;
+    if (bd.drag) { try { this.setPointerCapture(e.pointerId); } catch (er) {} }
+    drawBd();
+  });
+  $('bdCanvas').addEventListener('pointermove', function (e) {
+    if (!bd.drag) return;
+    var p0 = bdPoint(e), it = bdFind(bd.drag.id);
+    if (!it) { bd.drag = null; return; }
+    it[2] = Math.max(0.04, Math.min(0.96, (p0.x - bd.drag.dx) / BD_W)); it[3] = Math.max(0.04, Math.min(0.96, (p0.y - bd.drag.dy) / BD_H));
+    bd.drag.moved = true; drawBd();
+  });
+  function bdUp() {
+    if (!bd.drag) return;
+    var it = bdFind(bd.drag.id);
+    if (bd.drag.moved && it) { sendMsg({ t: 'bd_move', id: it[0], x: it[2], y: it[3] }); drawBoard3(); }
+    bd.drag = null;
+  }
+  $('bdCanvas').addEventListener('pointerup', bdUp);
+  $('bdCanvas').addEventListener('pointercancel', bdUp);
+
+  /* ---------- 본투비헤븐 2층 찬양 영상 (유튜브). 안 되면 사진과 음악 ---------- */
+  var praise = { vid: W.PRAISE.vid, photo: 0 }, video = { open: false, ok: false, fb: false, t: 0 };
+  function setPraise(p) {
+    if (!p || !/^[\w-]{11}$/.test(p.vid)) return;
+    var changed = p.vid !== praise.vid || (p.photo | 0) !== praise.photo;
+    praise = { vid: p.vid, photo: p.photo | 0 };
+    if (changed && video.open) { videoClose(true); videoOpen(); }
+  }
+  function videoOpen() {
+    if (!playing || W.kindOf(area) !== 'nm2') return;
+    video.open = true; video.ok = false; video.fb = false; musicStop();
+    var f = $('vFrame'); clear(f);
+    var ifr = document.createElement('iframe');
+    ifr.src = 'https://www.youtube-nocookie.com/embed/' + praise.vid + '?autoplay=1&playsinline=1&rel=0&enablejsapi=1&origin=' + encodeURIComponent(location.origin);
+    ifr.allow = 'autoplay; encrypted-media; picture-in-picture; fullscreen'; ifr.title = '찬양 영상';
+    ifr.addEventListener('load', function () { try { ifr.contentWindow.postMessage(JSON.stringify({ event: 'listening', id: 1, channel: 'widget' }), '*'); } catch (e) {} });
+    f.appendChild(ifr);
+    $('videoBox').className = ''; $('videoBox').style.display = 'block'; $('vMin').textContent = '작게';
+    clearTimeout(video.t);
+    video.t = setTimeout(function () {                    // 영상 소식이 없으면 사진으로 바꿀 수 있는 단추를 보여 준다 (영상은 그대로 둔다)
+      if (!video.open || video.ok || video.fb) return;
+      var b = document.createElement('button'); b.type = 'button'; b.className = 'vCap'; b.style.border = '0'; b.style.textAlign = 'left'; b.style.fontFamily = 'inherit';
+      b.textContent = '영상이 안 나오나요? 눌러서 사진과 음악으로 보기'; b.addEventListener('click', videoFallback); f.appendChild(b);
+    }, 9000);
+    musicUi();
+  }
+  function videoFallback() {
+    if (!video.open) return;
+    video.fb = true; clearTimeout(video.t);
+    var f = $('vFrame'); clear(f);
+    var im = document.createElement('img'); im.alt = '찬양기도회'; im.src = praise.photo ? '/photo/' + praise.photo : '/img/praise.jpg';
+    f.appendChild(im);
+    var cap = document.createElement('div'); cap.className = 'vCap'; cap.textContent = '찬양기도회 · 음악이 함께 나와요'; f.appendChild(cap);
+    music.idx = -1; musicPlay();
+  }
+  function videoClose(silent) {
+    clearTimeout(video.t);
+    if (video.open) { clear($('vFrame')); $('videoBox').style.display = 'none'; }
+    video.open = false; video.fb = false;
+    if (!silent && W.kindOf(area) === 'nm2') { music.idx = -1; musicPlay(); }
+    musicUi();
+  }
+  window.addEventListener('message', function (e) {
+    if (!video.open || !/^https:\/\/www\.youtube(-nocookie)?\.com$/.test(e.origin)) return;
+    var d = null; try { d = typeof e.data === 'string' ? JSON.parse(e.data) : e.data; } catch (er) { return; }
+    if (!d || typeof d !== 'object') return;
+    if (d.event === 'onError') videoFallback();
+    else if (d.event === 'onReady' || d.event === 'infoDelivery' || d.event === 'initialDelivery') video.ok = true;
+  });
+  $('vClose').addEventListener('click', function () { videoClose(false); });
+  $('vMin').addEventListener('click', function () { var b = $('videoBox'); b.className = b.className === 'min' ? '' : 'min'; $('vMin').textContent = b.className === 'min' ? '크게' : '작게'; });
+  $('videoBtn').addEventListener('click', function () { musicStop(); videoOpen(); });
 
   /* ---------- 확성기 ---------- */
   // 쓰기: 메뉴 → 확성기. 코인을 내면 모든 접속자 화면 위쪽에 5초 동안 뜬다.
@@ -2618,8 +2969,11 @@ function bonsaBoot() {
   ];
   var floorSpots = [
     { x: W.ELEV.x, z: W.ELEV.z, r: 3, label: '엘리베이터', run: function () { openElev(); } },
-    { x: W.KIOSK[0], z: W.KIOSK[1], r: 2.2, label: '층 안내판', run: function () { openFinfo(); } },
-    { x: -6.5, z: -LD / 2, r: 2.6, label: '층 게시판', run: function () { openBoard(); } }
+    { x: W.KIOSK[0], z: W.KIOSK[1], r: 2.2, label: '구역 안내판', run: function () { openFinfo(); } },
+    { x: -6.5, z: -LD / 2, r: 2.6, label: '구역 게시판', run: function () { openBoard(); } },
+    { x: W.FL_TREE.x - 2.2, z: W.FL_TREE.z, r: 2.6, label: '열매 맺기', run: function () { openFruit(); } },
+    { x: W.FL_TREE.x, z: W.FL_TREE.z - 2.2, r: 2.4, label: '열매 맺기', run: function () { openFruit(); } },
+    { x: W.FL_BOARD.x, z: W.FL_BOARD.z - 1.4, r: 2.8, label: '전도 게시판 꾸미기', run: function () { openBd(); } }
   ];
   var ceoSpots = floorSpots.slice(0, 2);
 
@@ -2652,8 +3006,8 @@ function bonsaBoot() {
       b = document.createElement('button'); b.type = 'button';
       b.appendChild(document.createTextNode(floorLabel(n)));           // 이름은 글자로만 넣는다
       sp = document.createElement('span');
-      sp.textContent = n === here ? '현재 층' : n === 1 ? '' : n === 12 ? (floors[12] && floors[12].lock ? '잠김' : '')
-        : ((floors[n] ? floors[n].c : 0) + '/' + W.FLOOR_CAP + (me.floor === n ? ' · 내 층' : ''));
+      sp.textContent = n === here ? '지금 여기' : n === 1 ? '' : n === 12 ? (floors[12] && floors[12].lock ? '잠김' : '')
+        : ((floors[n] ? floors[n].c : 0) + '/' + W.FLOOR_CAP + (me.floor === n ? ' · 내 구역' : ''));
       b.appendChild(sp);
       if (n === here) { b.className = 'here'; b.disabled = true; }
       else if (me.floor === n) b.className = 'mine';
@@ -2682,14 +3036,14 @@ function bonsaBoot() {
     $('fiTitle').textContent = floorLabel(n);
     var reg = $('fiReg'), canName;
     if (n === 12) {
-      $('fiNote').textContent = '사장실입니다. 이 층에는 등록할 수 없습니다.';
+      $('fiNote').textContent = '사장실입니다. 여기에는 등록할 수 없습니다.';
       reg.style.display = 'none';
       canName = isTop();
     } else {
-      $('fiNote').textContent = '등록 사원 ' + f.c + ' / ' + W.FLOOR_CAP + '명. 등록한 층에서는 게시판에 글을 쓰고 메뉴의 꾸미기로 가구를 놓을 수 있습니다. 한 사람은 한 층에만 등록할 수 있습니다.'
-        + (me.floor && me.floor !== n ? ' 지금은 ' + me.floor + '층에 등록되어 있습니다.' : '');
+      $('fiNote').textContent = '구역원 ' + f.c + ' / ' + W.FLOOR_CAP + '명. 등록한 구역에서는 게시판에 글을 쓰고, 전도 게시판을 꾸미고, 메뉴의 꾸미기로 가구를 놓을 수 있습니다. 한 사람은 한 구역에만 등록할 수 있습니다.'
+        + (me.floor && me.floor !== n ? ' 지금은 ' + W.floorName(me.floor) + '에 등록되어 있습니다.' : '');
       reg.style.display = '';
-      reg.textContent = me.floor === n ? '이 층 등록 해제' : me.floor ? me.floor + '층 등록 해제' : '이 층에 등록';
+      reg.textContent = me.floor === n ? '이 구역 등록 해제' : me.floor ? W.floorName(me.floor) + ' 등록 해제' : '이 구역에 등록';
       reg.className = me.floor ? 'btn ghost' : 'btn';
       canName = isTop() || me.r === 'manager' || (me.floor === n && (me.r === 'lead' || f.rep === myId));
     }
@@ -2708,7 +3062,7 @@ function bonsaBoot() {
     row.style.display = '';
     var boss = level(me.r) >= level('manager'), mine = f.rep && f.rep === myId;
     $('fiRepNote').textContent = (f.rep ? '대표자: ' + f.repName + (mine ? ' (나).' : '.') : '아직 대표자가 없습니다.')
-      + ' 층마다 한 명이고, 이 층 등록자 중에서 부장 이상이 정합니다. 대표자는 층 이름을 바꾸고 층 게시판의 고정을 풀 수 있습니다.';
+      + ' 구역마다 한 명이고, 이 구역 등록자 중에서 부장 이상이 정합니다. 대표자는 구역 이름을 바꾸고 구역 게시판의 고정을 풀고, 전도 게시판 정리를 할 수 있습니다.';
     var pick = canPickRep(n, f), sel = $('fiRepSel');
     $('fiRepPick').style.display = pick ? 'flex' : 'none';
     $('fiRepQuitRow').style.display = mine || (boss && f.rep) ? 'flex' : 'none';
@@ -2779,7 +3133,7 @@ function bonsaBoot() {
   function setTops(v) { for (var i = 0; i < roomTops.length; i++) roomTops[i].visible = v; }
   function openDeco() {
     if (!playing || uiOpen) return;
-    if (!canDeco()) { toast(W.floorOf(area) >= 2 ? '이 층에 등록한 사원만 꾸밀 수 있습니다.' : '꾸미기는 2층부터 할 수 있습니다.'); return; }
+    if (!canDeco()) { toast(W.floorOf(area) >= 2 ? '이 구역에 등록한 구역원만 꾸밀 수 있습니다.' : '꾸미기는 1구역부터 할 수 있습니다.'); return; }
     if (mySit) { toast('먼저 자리에서 일어나 주세요.'); return; }
     deco.on = true; deco.type = null; deco.sel = 0; deco.rot = 0; uiOpen = true;
     $('decoBar').style.display = 'block'; $('chatBtn').style.display = 'none'; $('stick').style.visibility = 'hidden';
@@ -3045,7 +3399,7 @@ function bonsaBoot() {
   function renderProf() {
     if (!prof) return;
     $('pfName').textContent = tagOf(prof.r, prof.n);
-    $('pfNote').textContent = '직급: ' + (RANKS[prof.r] || prof.r) + ' · 등록 층: ' + (prof.floor ? floorLabel(prof.floor) : '없음') + (repFloorOf(prof.id) ? ' (★ 대표자)' : '') + ' · ' + (prof.on ? '접속 중' : '접속 안 함');
+    $('pfNote').textContent = '직급: ' + (RANKS[prof.r] || prof.r) + ' · 등록 구역: ' + (prof.floor ? floorLabel(prof.floor) : '없음') + (repFloorOf(prof.id) ? ' (★ 대표자)' : '') + ' · ' + (prof.on ? '접속 중' : '접속 안 함');
     var box0 = $('pfRanks'), a = level(me.r), t = level(prof.r), any = false;
     clear(box0);
     if (a >= level('lead') && prof.id !== myId && prof.r !== 'owner' && t < a) {
@@ -3085,7 +3439,7 @@ function bonsaBoot() {
       var b = document.createElement('button'), sp = document.createElement('span');
       b.type = 'button'; b.setAttribute('data-id', u[0]);
       b.appendChild(document.createTextNode(tagOf(u[2], u[1])));
-      sp.textContent = (u[3] ? u[3] + '층' + (repFloorOf(u[0]) === u[3] ? ' ★대표' : '') : '미등록') + (u[4] ? ' · 접속 중' : '');
+      sp.textContent = (u[3] ? W.floorName(u[3]) + (repFloorOf(u[0]) === u[3] ? ' ★대표' : '') : '미등록') + (u[4] ? ' · 접속 중' : '');
       if (u[4]) on++;
       b.appendChild(sp); box0.appendChild(b);
     });
@@ -3124,6 +3478,15 @@ function bonsaBoot() {
     }
     for (var id in others) test(Number(id), others[id].g);
     test(myId, player);
+    // 열매를 누르면 기도문 (사람보다 가까우면 열매)
+    var fbest = Math.min(best, 46 * 46), fhit = 0, fw = new THREE.Vector3();
+    fruits.forEach(function (fr) {
+      fr.g.getWorldPosition(fw); pickV.copy(fw).project(camera);
+      if (!(pickV.z < 1)) return;
+      var dx = (pickV.x * 0.5 + 0.5) * w - px, dy = (-pickV.y * 0.5 + 0.5) * h - py, d = dx * dx + dy * dy;
+      if (d < fbest) { fbest = d; fhit = fr.id; }
+    });
+    if (fhit) { openFruitDet(fhit); return; }
     if (hit) sendMsg({ t: 'who', id: hit });
   }
   var tap = {};
@@ -3195,7 +3558,7 @@ function bonsaBoot() {
     }
   }
   function bgmStart() {
-    if (!bgm.on || bgm.timer || W.kindOf(area) === 'nm2') return;      // 나무 회사 2층에서는 그곳 음악이 나온다
+    if (!bgm.on || bgm.timer || W.kindOf(area) === 'nm2') return;      // 본투비헤븐 2층에서는 찬양 영상·음악이 나온다
     var AC = window.AudioContext || window.webkitAudioContext;
     if (!AC) return;
     try {
@@ -3314,6 +3677,8 @@ function bonsaBoot() {
         $('auth').style.display = 'none'; $('net').style.display = 'none';
         if (!playing) logLine(TOUCH ? '화면 아래쪽을 누른 채 끌면 이동, 위쪽을 끌면 시점 회전' : 'WASD 또는 왼쪽 조이스틱으로 이동, 화면을 드래그해 시점 회전');
         playing = true;
+        if (m.wnotice) wnotice = m.wnotice;
+        if (!noticeShown) { noticeShown = true; if (wnotice.m) setTimeout(function () { showNotice(true); }, 700); }   // 접속할 때 한 번 (다시 연결될 때는 안 띄운다)
         break;
       case 'join': addOther(m.p); break;
       case 'leave': removeOther(m.id); break;
@@ -3324,8 +3689,8 @@ function bonsaBoot() {
         });
         break;
       case 'mega': megaIn(m); break;
-      case 'chat':
-        logLine(tagOf(m.r, m.n) + ': ' + m.m);
+      case 'chat':                                       // 채팅창은 모든 접속자, 말풍선은 같은 장소에서만
+        logLine((m.a && m.a !== area ? '[' + placeShort(m.a) + '] ' : '') + tagOf(m.r, m.n) + ': ' + m.m);
         if (m.id === myId) say(player, m.m);
         else if (others[m.id]) say(others[m.id].g, m.m);
         break;
@@ -3793,13 +4158,17 @@ function bonsaBoot() {
         if (seat && seat.d < sbest) current = { label: '앉기', run: function () { sendMsg({ t: 'sit', id: seat.id, slot: seat.slot }); } };
       }
     } else {
-      if ((area === 'o_sa' || area === 'o_sn') && W.near(P.x, P.z, { x: W.BOOTH.x, z: W.BOOTH.z + 2.6 }, 2.4)) current = { label: '마을 엘리베이터', run: function () { openElev(); } };
+      if (area === 'o_gm' && W.near(P.x, P.z, { x: W.BOOTH.x, z: W.BOOTH.z + 2.6 }, 2.4)) current = { label: '마을 엘리베이터', run: function () { openElev(); } };
       else if (xmasOn && env.santa) {
         var sdx = P.x - W.XMAS.santa[0], sdz = P.z - W.XMAS.santa[1];
         if (sdx * sdx + sdz * sdz < 9) current = { label: '산타에게 말 걸기', run: santaTalk };
       }
     }
     villageTick(dt, now / 1000);
+    // 엘리베이터 앞에 걸어 들어오면 층(구역) 고르는 창이 저절로 열린다 (내린 자리에서는 열지 않고, 한 번 벗어났다 다시 와야 또 열린다)
+    var nearEl = (W.floorOf(area) && Math.hypot(P.x - W.ELEV.x, P.z - W.ELEV.z) < 2.5) || (area === 'o_gm' && W.near(P.x, P.z, { x: W.BOOTH.x, z: W.BOOTH.z + 2.6 }, 1.8));
+    if (nearEl && !elevNear && playing && !uiOpen && !chatOpen && !deco.on && now > lockUntil) openElev();
+    elevNear = !!nearEl;
     var act = $('act');
     if (current && !uiOpen && !chatOpen && playing) {
       if (act.textContent !== current.label) act.textContent = current.label;

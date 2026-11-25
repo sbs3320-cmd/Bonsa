@@ -183,10 +183,36 @@
   .lrow { display: flex; justify-content: space-between; gap: 10px; padding: 9px 2px; border-top: 1px solid #eef1f5; font-size: 14px; color: #1c2430; }
   .lrow b { font-weight: 700; word-break: break-all; }
   .lrow span { flex: none; color: #5b6676; font-size: 13px; }
+  .fchips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .fchips button { border: 0; border-radius: 16px; padding: 6px 12px; background: #fdecec; color: #7a1f1f; font-family: inherit; font-size: 13px; font-weight: 700; }
+  .fchips button.cl { width: 34px; height: 34px; padding: 0; border-radius: 17px; box-shadow: inset 0 0 0 1px rgba(0,0,0,.15); }
+  .fchips button.cl.sel { box-shadow: inset 0 0 0 3px #2f6fed; }
+  .fdPr { font-size: 17px; line-height: 1.55; color: #1c2430; white-space: pre-wrap; word-break: break-all; background: #fff8e6; border-radius: 12px; padding: 12px 14px; margin-bottom: 8px; }
+  .tabs { display: flex; gap: 6px; margin: 12px 0 4px; }
+  .tabs button { flex: 1; border: 0; border-radius: 10px; min-height: 38px; background: #eef1f5; font-family: inherit; font-size: 14px; font-weight: 700; color: #5b6676; }
+  .tabs button.on { background: #2f6fed; color: #fff; }
+  .card.notice { border-top: 6px solid #f2c230; }
+  .ntText { font-size: 17px; line-height: 1.6; color: #1c2430; white-space: pre-wrap; word-break: break-all; max-height: 50vh; overflow-y: auto; margin-bottom: 6px; }
+  .modal .card.wide { width: min(960px, 96vw); max-width: 96vw; }
+  #bdCanvas { width: 100%; height: auto; display: block; border-radius: 10px; touch-action: none; background: #b98d5e; }
+  #bdTools .btn { flex: 1; padding: 0 6px; white-space: nowrap; font-size: 14px; }
+  .stkGrid { display: grid; grid-template-columns: repeat(8, 1fr); gap: 6px; margin-top: 8px; }
+  .stkGrid button { border: 0; background: #f3f5f8; border-radius: 10px; font-size: 26px; min-height: 44px; }
+  #videoBox { position: fixed; left: 50%; transform: translateX(-50%); top: calc(56px + env(safe-area-inset-top)); width: min(560px, 94vw); background: #10151f; border-radius: 14px;
+    overflow: hidden; z-index: 6; display: none; box-shadow: 0 6px 20px rgba(0,0,0,.4); }
+  #videoBox.min { width: min(260px, 60vw); }
+  .vHead { display: flex; align-items: center; gap: 6px; padding: 6px 8px; color: #fff; font-size: 14px; }
+  .vHead b { flex: 1; }
+  .vHead button { border: 0; border-radius: 12px; background: rgba(255,255,255,.16); color: #fff; font-family: inherit; font-size: 13px; padding: 5px 10px; }
+  #vFrame { position: relative; width: 100%; aspect-ratio: 16 / 9; background: #000; }
+  #vFrame iframe, #vFrame img { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; object-fit: cover; }
+  #vFrame .vCap { position: absolute; left: 0; right: 0; bottom: 0; padding: 6px 10px; background: rgba(0,0,0,.55); color: #fff; font-size: 13px; }
+  #videoBtn { position: fixed; display: none; right: 14px; top: calc(100px + env(safe-area-inset-top)); border: 0; border-radius: 18px; min-height: 36px; padding: 0 14px;
+    background: rgba(20,28,40,.78); color: #fff; font-family: inherit; font-size: 13px; font-weight: 700; z-index: 5; }
   #rankList .small { font-size: 12px; color: #7a8494; margin-top: 6px; }
   #prayBtn, #musicBtn { position: fixed; display: none; border: 0; border-radius: 22px; font-family: inherit; font-weight: 700; z-index: 5; }
   #prayBtn { right: 22px; bottom: 122px; min-height: 48px; padding: 0 18px; background: #c9a227; color: #fff; font-size: 16px; box-shadow: 0 4px 12px rgba(0,0,0,.3); }
-  #musicBtn { left: 50%; transform: translateX(-50%); top: 58px; min-height: 36px; padding: 0 14px; background: rgba(20,28,40,.78); color: #fff; font-size: 13px; }
+  #musicBtn { left: 14px; top: calc(100px + env(safe-area-inset-top)); min-height: 36px; padding: 0 14px; background: rgba(20,28,40,.78); color: #fff; font-size: 13px; }
   /* 게임 화면 */
   #gameUi { position: fixed; inset: 0; background: linear-gradient(#2a1b55, #140d2e); display: none; flex-direction: column; z-index: 25;
     padding: calc(12px + env(safe-area-inset-top)) 14px calc(14px + env(safe-area-inset-bottom)); color: #fff; touch-action: manipulation; }
@@ -195,6 +221,7 @@
   .gHead span { flex: 1; font-size: 14px; color: #ffd23f; text-align: right; }
   .gHead .btn { min-height: 38px; padding: 0 14px; }
   #gBody { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; overflow: hidden; }
+  .gCoin { color: #ffd23f; font-size: 20px; font-weight: 700; }
   .gNote { font-size: 15px; color: rgba(255,255,255,.8); text-align: center; line-height: 1.5; max-width: 420px; }
   .gHuge { font-size: 44px; font-weight: 700; letter-spacing: 2px; text-align: center; word-break: break-all; max-width: 92vw; }
   .gHuge.mono { font-variant-numeric: tabular-nums; letter-spacing: 6px; }
@@ -350,11 +377,12 @@
       <button type="button" id="mnProfile">내 프로필</button>
       <button type="button" id="mnRoster">사원 명부</button>
       <button type="button" id="mnBoard1">전체 게시판</button>
-      <button type="button" id="mnBoardF">내 층 게시판</button>
+      <button type="button" id="mnBoardF">내 구역 게시판</button>
       <button type="button" id="mnDeco">꾸미기</button>
       <button type="button" id="mnEvents">이벤트</button>
       <button type="button" id="mnShop">상점</button>
       <button type="button" id="mnMega">확성기</button>
+      <button type="button" id="mnNotice">한 주 공지</button>
     </div>
     <div class="sec"><b>설정</b>
       <div class="list" style="margin-top:8px">
@@ -393,11 +421,83 @@
 <div id="fruitM" class="modal">
   <div class="card">
     <h2>🍎 열매 맺기</h2>
-    <div class="note">나무에 적을 이름을 넣으세요. 아무 이름이나 괜찮아요. 나무에는 최근 20개 열매만 달리고, 기록은 모두 남습니다.</div>
-    <input id="fruitName" maxlength="10" autocomplete="off" class="vin">
+    <div class="note">기도할 사람의 이름과 기도문을 적으면 나무에 열매가 맺혀요. 다른 사람들이 열매를 눌러 기도문을 보고 함께 기도할 수 있어요. 나무에는 최근 20개만 달리고, 기록은 모두 남습니다.</div>
+    <input id="fruitName" maxlength="10" autocomplete="off" class="vin" placeholder="이름 (10자까지)">
+    <textarea id="fruitPr" maxlength="100" rows="3" class="vin" style="margin-top:8px" placeholder="기도문 (100자까지, 비워도 돼요)"></textarea>
+    <div id="fruitNow" class="fchips"></div>
     <div class="row" style="justify-content:flex-end"><button class="btn ghost" type="button" data-close="1">닫기</button><button class="btn" id="fruitGo" type="button">열매 맺기</button></div>
   </div>
 </div>
+<div id="fruitDetM" class="modal">
+  <div class="card">
+    <h2 id="fdName">🍎</h2>
+    <div id="fdPr" class="fdPr"></div>
+    <div class="note" id="fdBy"></div>
+    <button class="btn" id="fdAmen" type="button" style="width:100%">🙏 이 사람을 위해 함께 기도했어요</button>
+    <div class="note" id="fdWho" style="margin-top:10px"></div>
+    <div style="text-align:right;margin-top:6px"><button class="btn ghost" type="button" data-close="1">닫기</button></div>
+  </div>
+</div>
+<div id="guestM" class="modal">
+  <div class="card">
+    <h2>📖 방명록</h2>
+    <div class="note">본투비헤븐에 다녀간 흔적을 남겨 주세요. 모두에게 보입니다.</div>
+    <div class="row"><input id="guestIn" maxlength="60" autocomplete="off" class="vin" placeholder="한마디 (60자까지)" style="flex:1"><button class="btn" id="guestGo" type="button">남기기</button></div>
+    <div class="tabs"><button type="button" id="gbTab1" class="on">방명록</button><button type="button" id="gbTab2">출입명부</button></div>
+    <div id="guestList" class="llist"></div>
+    <div style="text-align:right;margin-top:10px"><button class="btn ghost" type="button" data-close="1">닫기</button></div>
+  </div>
+</div>
+<div id="praysM" class="modal">
+  <div class="card">
+    <h2>🙏 기도제목</h2>
+    <div class="note">2층 방석에 앉으면 내 기도제목을 쓸 수 있어요. 모두에게 보입니다.</div>
+    <div id="praysList" class="llist"></div>
+    <div style="text-align:right;margin-top:10px"><button class="btn ghost" type="button" data-close="1">닫기</button></div>
+  </div>
+</div>
+<div id="noticeM" class="modal">
+  <div class="card notice">
+    <h2>📢 한 주 방향성</h2>
+    <div id="ntText" class="ntText"></div>
+    <div class="note" id="ntBy"></div>
+    <div class="row" style="align-items:center"><span id="ntLeft" style="flex:1;font-size:13px;color:#5b6676"></span><button class="btn" type="button" data-close="1">확인</button></div>
+  </div>
+</div>
+<div id="noticeEdM" class="modal">
+  <div class="card">
+    <h2>한 주 공지 쓰기</h2>
+    <div class="note">모든 사람이 접속할 때 화면 가운데에 10초 동안 보입니다. 비우고 올리면 공지가 내려갑니다.</div>
+    <textarea id="neText" maxlength="300" rows="6" class="vin" placeholder="이번 주 방향 (300자까지)"></textarea>
+    <div class="row" style="align-items:center"><span id="neCount" style="flex:1;font-size:13px;color:#5b6676">0 / 300</span><button class="btn ghost" type="button" data-close="1">닫기</button><button class="btn" id="neGo" type="button">올리기</button></div>
+  </div>
+</div>
+<div id="bdM" class="modal">
+  <div class="card wide">
+    <h2 id="bdTitle">전도 게시판</h2>
+    <div class="note" id="bdNote"></div>
+    <canvas id="bdCanvas" width="1400" height="700"></canvas>
+    <div id="bdSel" class="row" style="display:none;align-items:center"><span id="bdSelText" style="flex:1;font-size:13px;color:#5b6676"></span><button class="btn ghost" id="bdDel" type="button">떼기</button></div>
+    <div id="bdTools" class="row">
+      <button class="btn ghost" id="bdMemoBtn" type="button">📝 메모</button>
+      <button class="btn ghost" id="bdStkBtn" type="button">😊 스티커</button>
+      <button class="btn ghost" id="bdPhotoBtn" type="button">📷 사진</button>
+      <input id="bdFile" type="file" accept="image/*" style="display:none">
+    </div>
+    <div id="bdMemo" style="display:none">
+      <input id="bdMemoIn" maxlength="40" autocomplete="off" class="vin" placeholder="메모 (40자까지)">
+      <div id="bdColors" class="fchips"></div>
+      <div class="row" style="justify-content:flex-end"><button class="btn" id="bdMemoGo" type="button">붙이기</button></div>
+    </div>
+    <div id="bdStk" class="stkGrid" style="display:none"></div>
+    <div style="text-align:right;margin-top:8px"><button class="btn ghost" type="button" data-close="1">닫기</button></div>
+  </div>
+</div>
+<div id="videoBox">
+  <div class="vHead"><b>🎵 찬양</b><button type="button" id="vMin">작게</button><button type="button" id="vClose">닫기</button></div>
+  <div id="vFrame"></div>
+</div>
+<button id="videoBtn" type="button">🎵 찬양 영상</button>
 <div id="fruitLogM" class="modal">
   <div class="card">
     <h2>열매 기록</h2>
@@ -416,8 +516,8 @@
 </div>
 <div id="prayM" class="modal">
   <div class="card">
-    <h2>글 쓰기</h2>
-    <div class="note">쓴 글은 앞쪽 큰 화면에 이름과 함께 올라갑니다.</div>
+    <h2>기도제목 쓰기</h2>
+    <div class="note">쓴 기도제목은 앞쪽 큰 화면에 이름과 함께 올라가고, 모두가 볼 수 있습니다.</div>
     <textarea id="prayText" maxlength="100" rows="3" class="vin" placeholder="마음을 담아 적어 주세요 (100자까지)"></textarea>
     <div class="row" style="align-items:center"><span id="prayCount" style="flex:1;font-size:13px;color:#5b6676">0 / 100</span><button class="btn ghost" type="button" data-close="1">닫기</button><button class="btn" id="prayGo" type="button">화면에 올리기</button></div>
   </div>
@@ -434,7 +534,7 @@
   <div class="gHead"><b id="gTitle"></b><span id="gInfo"></span><button class="btn ghost" id="gClose" type="button">그만하기</button></div>
   <div id="gBody"></div>
 </div>
-<button id="prayBtn" type="button">✏️ 글 쓰기</button>
+<button id="prayBtn" type="button">✏️ 기도제목 쓰기</button>
 <button id="musicBtn" type="button">♪ 음악 끄기</button>
 
 <div id="elev" class="modal">
@@ -442,16 +542,16 @@
     <h2>엘리베이터</h2>
     <div id="villRow" style="margin-bottom:12px">
       <b>마을 이동</b>
-      <div class="note" style="margin:2px 0 8px">무거마을(본사)은 본사 1층 로비로, 삼산·성남마을은 마을 엘리베이터로 내립니다.</div>
+      <div class="note" style="margin:2px 0 8px">무거마을(본사)은 본사 로비로, 게임마을은 마을 엘리베이터로 내립니다.</div>
       <div id="villList" class="list"></div>
     </div>
     <div id="floorBox">
-      <div class="note">가고 싶은 층을 누르세요.</div>
+      <div class="note">가고 싶은 구역을 누르세요.</div>
       <div id="floorList" class="list"></div>
     </div>
 
     <form id="pwRow" class="sec" style="display:none" autocomplete="off">
-      <b>12층 사장실은 비밀번호가 걸려 있습니다</b>
+      <b>사장실은 비밀번호가 걸려 있습니다</b>
       <div class="row">
         <input id="pwIn" type="password" maxlength="32" placeholder="비밀번호" autocomplete="off">
         <button class="btn" type="submit">확인</button>
@@ -467,7 +567,7 @@
     <div class="note" id="fiNote"></div>
     <button class="btn" id="fiReg" type="button" style="width:100%"></button>
     <div id="fiRepRow" class="sec">
-      <b>층 대표자</b>
+      <b>구역 대표자</b>
       <div class="note" id="fiRepNote" style="margin:0"></div>
       <div class="row" id="fiRepPick" style="display:none">
         <select id="fiRepSel"></select>
@@ -476,14 +576,14 @@
       <div class="row" id="fiRepQuitRow" style="display:none"><button class="btn ghost" id="fiRepQuit" type="button">대표 내려놓기</button></div>
     </div>
     <form id="fiNameRow" class="sec" autocomplete="off">
-      <b>층 이름 바꾸기</b>
+      <b>이름 바꾸기</b>
       <div class="row">
         <input id="fiName" maxlength="12" placeholder="예: 개발팀 (비우면 이름 삭제)">
         <button class="btn" type="submit">저장</button>
       </div>
     </form>
     <form id="fiPassRow" class="sec" autocomplete="off">
-      <b>12층 비밀번호</b>
+      <b>사장실 비밀번호</b>
       <div class="note" id="fiPassNote" style="margin:0"></div>
       <div class="row">
         <input id="fiPass" type="password" maxlength="32" placeholder="새 비밀번호 (4~32자)" autocomplete="new-password">

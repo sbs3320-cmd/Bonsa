@@ -45,8 +45,11 @@
   var FLOOR_MIN = 2, FLOOR_MAX = 12, FLOOR_REG_MAX = 11, FLOOR_CAP = 20;
   var ELEV = { x: 8.6, z: -LD / 2 }, ELEV_OUT = { x: 8.6, z: -LD / 2 + 1.8 };
   var KIOSK = [5.4, -8.3];                                       // 층 안내판
-  var colFloor = [c(KIOSK[0], KIOSK[1], 0.9, 0.7)];
-  var col12 = colFloor.concat([c(0, -3.6, 4.4, 1.5), c(0, -5.3, 1.1, 1.1),       // 사장 책상, 의자
+  // 1.9.0: 2~11층(1~10구역)마다 열매 기도 나무(앞쪽 오른편)와 전도 게시판(앞 벽 왼편)
+  var FL_TREE = { x: 8, z: 4.4 }, FL_BOARD = { x: -5, z: LD / 2, w: 7, h: 3.5 };
+  var colBase = [c(KIOSK[0], KIOSK[1], 0.9, 0.7)];
+  var colFloor = colBase.concat([c(FL_TREE.x, FL_TREE.z, 2.4, 2.4)]);
+  var col12 = colBase.concat([c(0, -3.6, 4.4, 1.5), c(0, -5.3, 1.1, 1.1),       // 사장 책상, 의자
     c(-11.55, -3, 0.9, 5.2),                                                       // 책장
     c(-7.5, 4.5, 1.1, 3), c(-5.2, 4.5, 1.6, 1.6),                                  // 소파, 탁자
     c(10.8, 7.8, 0.9, 0.9), c(-10.8, 7.8, 0.9, 0.9)]);                             // 화분
@@ -125,13 +128,14 @@
   };
   var SUIT_DEF = { jacket: 'j_navy', pants: 'p_charcoal', tie: 't_red' };
   // 확성기: 모든 접속자 화면 위쪽에 5초 동안 뜬다. 값은 관리자 화면에서 바꿀 수 있다.
-  var MEGA = { n: '확성기 (한 번)', price: 30, len: 60, show: 5000, cooldown: 30000, queue: 10, replay: 60000 };
+  var MEGA = { n: '확성기 (한 번)', price: 0, len: 60, show: 5000, cooldown: 30000, queue: 10, replay: 60000 };
   var PASS_MIN = 4;
   var LOOK_SLOTS = ['color', 'hat', 'jacket', 'pants', 'tie'];
   var START_MONEY = 200, EVENT_REWARD_MAX = 1000, EVENT_OPEN_MAX = 10;
   var FURN_CAP = 60;                                   // 층마다 놓을 수 있는 개수 (모바일 성능)
   // 가구를 놓을 수 없는 자리: 엘리베이터 앞, 안내판 앞, 게시판 앞
   var KEEP_OUT = [c(8.6, -7.4, 4.4, 3.2), c(KIOSK[0], -7.4, 1.8, 1.6), c(-6.5, -8.2, 5, 1.6)];
+  var KEEP_OUT_F = [c(FL_TREE.x, FL_TREE.z, 5.2, 5.6), c(FL_BOARD.x, LD / 2 - 1.1, 7.6, 2.2)];   // 2~11층: 나무 둘레, 전도 게시판 앞
   function furnSize(type, rot) {
     var f = FURN[type];
     return rot % 2 ? { w: f.d, d: f.w } : { w: f.w, d: f.d };
@@ -150,6 +154,7 @@
     r = furnRect(it);
     if (r.x0 < -LW / 2 || r.x1 > LW / 2 || r.z0 < -LD / 2 || r.z1 > LD / 2) return false;
     for (i = 0; i < KEEP_OUT.length; i++) if (overlap(r, KEEP_OUT[i])) return false;
+    if (floor !== 12) for (i = 0; i < KEEP_OUT_F.length; i++) if (overlap(r, KEEP_OUT_F[i])) return false;
     fixed = floor === 12 ? col12 : colFloor;
     if (f.solid) for (i = 0; i < fixed.length; i++) if (overlap(r, fixed[i])) return false;
     for (i = 0; i < others.length; i++) {
@@ -190,37 +195,34 @@
   function door(area, x, z, slack) { return door2(area, x, z, slack); }
   var SPAWN = { start: { x: 0, z: 24 }, in: { x: 0, z: 6.6 }, out: { x: 0, z: 9.5 } };
 
-  // ================= 마을 (무거·삼산·성남) =================
-  // 본사가 있는 무거마을의 야외가 'out', 삼산·성남은 'o_sa', 'o_sn'. 세 마을은 땅·나무·가게 배치가 같고,
-  // 가운데에 무거는 본사 건물, 삼산·성남은 마을 엘리베이터와 분수가 있다.
-  // 마을마다 나무 회사(1층 'nm1_마을', 2층 'nm2_마을')와 플레이존('pz_마을')이 같은 자리에 있다.
-  var VKEYS = ['mu', 'sa', 'sn'];
-  var VILLAGES = { mu: { n: '무거마을', out: 'out' }, sa: { n: '삼산마을', out: 'o_sa' }, sn: { n: '성남마을', out: 'o_sn' } };
+  // ================= 마을 (무거마을, 게임마을) =================
+  // 1.9.0: 본사가 있는 무거마을 야외 'out' 에 본투비헤븐(예전 나무 회사, 1층 'nm1_mu', 2층 'nm2_mu'),
+  // 게임마을 야외 'o_gm' 에 플레이존('pz_gm'). 두 마을은 땅·나무·가게 배치가 같고, 게임마을 가운데에는
+  // 본사 건물 대신 마을 엘리베이터와 분수가 있다.
+  var VKEYS = ['mu', 'gm'];
+  var VILLAGES = { mu: { n: '무거마을', out: 'out' }, gm: { n: '게임마을', out: 'o_gm' } };
+  var BH_NAME = '본투비헤븐';
   var NAMU = { x: -28, z: -2, w: 12, d: 9 }, PLAY = { x: 28, z: -2, w: 12, d: 9 };   // 건물 자리와 크기 (문은 +z 쪽 가운데)
-  var BOOTH = { x: 0, z: 3 }, FOUNTAIN = { x: 0, z: -4 }, VSIGN = { x: 0, z: -9.5 };   // 삼산·성남 가운데
-  colOut.push(c(NAMU.x, NAMU.z, NAMU.w, NAMU.d), c(PLAY.x, PLAY.z, PLAY.w, PLAY.d));
+  var BOOTH = { x: 0, z: 3 }, FOUNTAIN = { x: 0, z: -4 }, VSIGN = { x: 0, z: -9.5 };   // 게임마을 가운데
   var colVillage = colOut.filter(function (b) { return !(b.x0 === -8 && b.x1 === 8 && b.z0 === -6 && b.z1 === 6); })   // 본사 자리를 비운다
-    .concat([c(BOOTH.x, BOOTH.z, 3.4, 3.4), c(FOUNTAIN.x, FOUNTAIN.z, 4.6, 4.6), c(VSIGN.x, VSIGN.z, 8.4, 0.8)]);
-  function isOut(a) { return a === 'out' || a === 'o_sa' || a === 'o_sn'; }
+    .concat([c(BOOTH.x, BOOTH.z, 3.4, 3.4), c(FOUNTAIN.x, FOUNTAIN.z, 4.6, 4.6), c(VSIGN.x, VSIGN.z, 8.4, 0.8), c(PLAY.x, PLAY.z, PLAY.w, PLAY.d)]);
+  colOut.push(c(NAMU.x, NAMU.z, NAMU.w, NAMU.d));
+  function isOut(a) { return a === 'out' || a === 'o_gm'; }
   function kindOf(a) {
     if (isOut(a)) return 'out';
     if (a === 'in') return 'in';
-    var m = /^(nm1|nm2|pz)_(mu|sa|sn)$/.exec(a || '');
-    if (m) return m[1];
+    if (a === 'nm1_mu' || a === 'nm2_mu') return a.slice(0, 3);
+    if (a === 'pz_gm') return 'pz';
     return floorOf(a) ? 'floor' : '';
   }
   // 그 장소가 속한 마을 (본사 건물 안은 무거마을)
   function villageOf(a) {
-    if (a === 'o_sa') return 'sa';
-    if (a === 'o_sn') return 'sn';
-    var m = /^(?:nm1|nm2|pz)_(mu|sa|sn)$/.exec(a || '');
-    if (m) return m[1];
-    return a === 'out' || a === 'in' || floorOf(a) ? 'mu' : '';
+    if (a === 'o_gm' || a === 'pz_gm') return 'gm';
+    return a === 'out' || a === 'in' || a === 'nm1_mu' || a === 'nm2_mu' || floorOf(a) ? 'mu' : '';
   }
   function allAreas() {
-    var list = ['out', 'in', 'o_sa', 'o_sn'], n;
+    var list = ['out', 'in', 'o_gm', 'nm1_mu', 'nm2_mu', 'pz_gm'], n;
     for (n = FLOOR_MIN; n <= FLOOR_MAX; n++) list.push('f' + n);
-    VKEYS.forEach(function (v) { list.push('nm1_' + v, 'nm2_' + v, 'pz_' + v); });
     return list;
   }
   // 건물 안 (나무 회사, 플레이존). 방 크기는 로비와 같고, 문은 앞쪽(+z) 가운데에 있다.
@@ -241,7 +243,22 @@
     t25: { n: '1부터 25까지', unit: '초', high: false, note: '흩어진 1~25를 순서대로 빨리 누릅니다. 시간이 짧을수록 높은 순위입니다.' }
   };
   var RANK_PRIZE = [300, 200, 100];                               // 매주 게임마다 1~3위 코인 (관리자 화면에서 바꿈)
-  var FRUIT_SHOW = 20, FRUIT_NAME = 10, PRAY_LEN = 100;
+  var FRUIT_SHOW = 20, FRUIT_NAME = 10, PRAY_LEN = 100, FRUIT_PRAY = 100;
+  // 열매 나무가 있는 곳: 본투비헤븐 1층('mu')과 1~10구역('f2'~'f11'). 기록은 곳마다 따로.
+  function treePlace(a) {
+    if (a === 'nm1_mu') return 'mu';
+    var n = floorOf(a);
+    return n >= FLOOR_MIN && n <= FLOOR_REG_MAX ? 'f' + n : '';
+  }
+  function treePos(a) { return a === 'nm1_mu' ? NM_TREE : FL_TREE; }
+  // 층 이름: 로비, 1~10구역(2~11층), 사장실(12층)
+  function floorName(n) { return n === 1 ? '로비' : n === 12 ? '사장실' : n >= 2 && n <= 11 ? (n - 1) + '구역' : ''; }
+  // 전도 게시판: 1~10구역. 메모·스티커·사진을 붙인다.
+  var BOARD = { max: 40, photos: 15, memo: 40, colors: ['#fff59d', '#ffcdd2', '#c8e6c9', '#bbdefb', '#e1bee7', '#ffe0b2'],
+    stickers: ['🙏', '✝️', '❤️', '⭐', '🌸', '🕊️', '🌈', '🔥', '📖', '☀️', '🎉', '👍', '💐', '😊', '🙌', '✨'] };
+  var GUEST_LEN = 60, NOTICE_LEN = 300;
+  var COIN_RULES = { attend: 100, game: 10, gameDay: 100 };      // 출석 코인, 게임 한 판 코인, 게임 코인 하루 최대 (관리자 화면에서 바꿈)
+  var PRAISE = { vid: '09228ZOkddc' };                            // 본투비헤븐 2층 찬양 영상 (관리자 화면에서 바꿈)
   // 2층 음악 (모두가 같은 곡의 같은 부분을 듣도록 서버 시각으로 맞춘다). d 는 초.
   var MUSIC = [{ f: '/music/song1.mp3', d: 2417.06 }, { f: '/music/song2.mp3', d: 1995.68 }, { f: '/music/song3.mp3', d: 2171.12 }];
 
@@ -263,8 +280,8 @@
       if (area === 'out' && Math.abs(x) < 1.5 + slack && z > 6 - slack && z < 7.1 + slack) return 'in';
       var fz = NAMU.z + NAMU.d / 2;
       if (z > fz - slack && z < fz + 1.1 + slack) {
-        if (Math.abs(x - NAMU.x) < 1.4 + slack) return 'nm1_' + v;
-        if (Math.abs(x - PLAY.x) < 1.4 + slack) return 'pz_' + v;
+        if (area === 'out' && Math.abs(x - NAMU.x) < 1.4 + slack) return 'nm1_mu';
+        if (area === 'o_gm' && Math.abs(x - PLAY.x) < 1.4 + slack) return 'pz_gm';
       }
       return null;
     }
@@ -296,5 +313,7 @@
     VKEYS: VKEYS, VILLAGES: VILLAGES, NAMU: NAMU, PLAY: PLAY, BOOTH: BOOTH, FOUNTAIN: FOUNTAIN, VSIGN: VSIGN, isOut: isOut, kindOf: kindOf, villageOf: villageOf,
     allAreas: allAreas, spawnOf: spawnOf, near: near, NM_TREE: NM_TREE, NM_STAIRS1: NM_STAIRS1, NM_STAIRS2: NM_STAIRS2, NM_BOOK: NM_BOOK, NM_BOARD: NM_BOARD,
     NM2_CAP: NM2_CAP, CUSHIONS: CUSHIONS, CABINETS: CABINETS, RANK_BOARD: RANK_BOARD, GAMES: GAMES, RANK_PRIZE: RANK_PRIZE,
-    FRUIT_SHOW: FRUIT_SHOW, FRUIT_NAME: FRUIT_NAME, PRAY_LEN: PRAY_LEN, MUSIC: MUSIC };
+    FRUIT_SHOW: FRUIT_SHOW, FRUIT_NAME: FRUIT_NAME, PRAY_LEN: PRAY_LEN, MUSIC: MUSIC,
+    BH_NAME: BH_NAME, FL_TREE: FL_TREE, FL_BOARD: FL_BOARD, FRUIT_PRAY: FRUIT_PRAY, treePlace: treePlace, treePos: treePos, floorName: floorName,
+    BOARD: BOARD, GUEST_LEN: GUEST_LEN, NOTICE_LEN: NOTICE_LEN, COIN_RULES: COIN_RULES, PRAISE: PRAISE };
 });
