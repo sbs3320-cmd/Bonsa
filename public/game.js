@@ -1403,7 +1403,7 @@ function bonsaBoot() {
     var bannerBack = new THREE.Mesh(banner.geometry, banner.material); bannerBack.rotation.y = Math.PI;
     bannerBack.position.set(0, 4.85, 16.99); bannerBack.userData.ns = true; xo.add(bannerBack);
     var bw = banner.geometry.parameters.width / 2;
-    [[-bw + 0.1, -3.3], [bw - 0.1, 3.3]].forEach(function (q) {                                             // 현수막 끈
+    [[-bw + 0.1, W.LAMPS[0][0]], [bw - 0.1, W.LAMPS[1][0]]].forEach(function (q) {                                             // 현수막 끈
       var len = Math.hypot(q[1] - q[0], 3.85 - 5.15), rope = box(len, 0.03, 0.03, 0x3a3a3a, (q[0] + q[1]) / 2, 4.5, 17.02, xo);
       rope.rotation.z = Math.atan2(3.85 - 5.15, q[1] - q[0]);
     });
@@ -1415,8 +1415,8 @@ function bonsaBoot() {
     strHq.push(sagLine([-3.1, 3.66, 8.82], [0, 3.66, 8.82], 8, 0.22)); strHq.push(sagLine([0, 3.66, 8.82], [3.1, 3.66, 8.82], 8, 0.22));
     fairyLights(strHq, xhq, hq, 1);
     W.SHOPS.forEach(function (s0) { for (var k = 0; k < 3; k++) str.push(sagLine([s0[0] - 3.2 + k * 6.4 / 3, 3.62, W.SHOP_Z + 2.75], [s0[0] - 3.2 + (k + 1) * 6.4 / 3, 3.62, W.SHOP_Z + 2.75], 7, 0.28)); });
-    [-1, 1].forEach(function (sd) { str.push(sagLine([sd * 3.3, 3.86, 17], [sd * 3.3, 3.86, 27], 26, 0.9)); });
-    str.push(sagLine([-3.3, 3.86, 27], [3.3, 3.86, 27], 16, 0.55));
+    [-1, 1].forEach(function (sd) { str.push(sagLine([sd * 4.4, 3.86, 17], [sd * 4.4, 3.86, 27], 26, 0.9)); });
+    str.push(sagLine([-4.4, 3.86, 27], [4.4, 3.86, 27], 16, 0.55));
     fairyLights(str, xo, outdoor, 1);
     // 그림자 설정과 묶기
     xo.traverse(function (o) { if (!o.isMesh || o.userData.ns || o.isInstancedMesh && !o.userData.rcv) return; o.receiveShadow = true; o.castShadow = !o.userData.rcv; });
@@ -1908,7 +1908,7 @@ function bonsaBoot() {
   scene.add(player);
   var P = { x: 0, z: 24, face: Math.PI, walk: 0 };
   var ZOOM_MIN = 0.5, ZOOM_MAX = 3.6;                  // 시점 거리 배율 (야외 기본 8m × 배율 → 약 4~29m)
-  var cam = { yaw: 0, pitch: 0.42, zoom: 1.3, follow: true, manualT: 0 };
+  var cam = { yaw: 0, pitch: 0.42, zoom: 1.3, follow: true, manualT: 0, entry: null };
   // 시점 따라가기(기본 켜짐): 걸으면 카메라가 천천히 캐릭터 뒤로 돌아간다
   try { cam.follow = localStorage.getItem('bonsa_follow') !== '0'; } catch (err) {}
   // 시점 거리 배율은 기기에 기억해 둔다.
@@ -1978,7 +1978,11 @@ function bonsaBoot() {
       if (W.kindOf(next) === 'nm2') { bgmStop(); videoOpen(); } else { videoClose(true); musicStop(); if (playing) bgmStart(); }
       setPapers(pins); setFurn(furn);
       P.face = typeof face === 'number' ? face : (next === 'in' ? Math.PI : 0);
-      cam.yaw = W.isOut(next) ? Math.PI : 0; cam.pitch = W.isOut(next) ? 0.42 : 0.36;
+      // 1.9.2 (사용자 요청): 건물·계단으로 들어가면 카메라가 캐릭터 앞에서 얼굴을 비추고(뒤가 벽이라 답답하지 않게),
+      // 움직이기 시작하면 천천히 캐릭터 뒤로 돌아간다. 야외로 나오면 바로 캐릭터 뒤.
+      if (W.isOut(next)) { cam.yaw = P.face + Math.PI; cam.entry = null; }
+      else { cam.yaw = P.face; cam.entry = { yaw: P.face + Math.PI }; }
+      cam.pitch = W.isOut(next) ? 0.42 : 0.36;
       setOthers(list);
       $('fade').classList.remove('on');
     }, 260);
@@ -4028,7 +4032,9 @@ function bonsaBoot() {
       if (now - lastStand > 600) { lastStand = now; sendMsg({ t: 'stand' }); }
     }
     if (moving) {
-      var sy = Math.sin(cam.yaw), cy = Math.cos(cam.yaw);
+      if (cam.entry && look.id !== null) cam.entry = null;          // 손으로 시점을 돌리면 그때부터는 손으로 정한 대로
+      var by = cam.entry ? cam.entry.yaw : cam.yaw;                  // 앞에서 비추는 동안에는 "위로 = 캐릭터가 보는 쪽"
+      var sy = Math.sin(by), cy = Math.cos(by);
       var vx = (-sy * iy + cy * ix), vz = (-cy * iy - sy * ix);
       var nx = P.x + vx * W.SPEED * dt, nz = P.z + vz * W.SPEED * dt;
       var cols = curCols();
@@ -4036,7 +4042,11 @@ function bonsaBoot() {
       if (!W.blocked(area, P.x, nz, cols)) P.z = nz;
       P.face = turn(P.face, Math.atan2(vx, vz), Math.min(1, dt * 12));
       // 앞으로 걸을수록 강하게, 옆으로는 약하게 따라가고, 뒤로(카메라 쪽으로) 걸을 때와 방금 손으로 돌렸을 때는 따라가지 않는다
-      if (cam.follow && look.id === null && now - cam.manualT > 1200 && !shopOpen()) {
+      if (cam.entry) {                                               // 들어온 뒤 처음 움직일 때: 캐릭터 뒤로 돌아간다
+        cam.yaw = turn(cam.yaw, P.face + Math.PI, Math.min(1, dt * 3.2));
+        var dd = Math.atan2(Math.sin(P.face + Math.PI - cam.yaw), Math.cos(P.face + Math.PI - cam.yaw));
+        if (Math.abs(dd) < 0.06) { cam.entry = null; cam.manualT = 0; }
+      } else if (cam.follow && look.id === null && now - cam.manualT > 1200 && !shopOpen()) {
         var fw = Math.max(0, Math.min(1, (iy / (mag || 1) + 0.35) / 1.35));
         cam.yaw = turn(cam.yaw, P.face + Math.PI, Math.min(1, dt * 2.4 * fw * Math.min(1, mag)));
       }
