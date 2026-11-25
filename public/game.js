@@ -189,48 +189,6 @@ function bonsaBoot() {
       new THREE.MeshBasicMaterial({ map: t.tex, transparent: true }));
   }
 
-  /* ---------- 카메라 가림 막기 ---------- */
-  // 야외에서 내 캐릭터와 카메라 사이에 큰 물체(가게, 나무 잎, 가로등 머리, 크리스마스트리)가 끼면 카메라를 그 앞으로 당긴다.
-  // 물체는 상자(최소·최대 x, y, z)로 단순하게 잡는다. 판정은 상자 수십 개뿐이라 휴대폰에서도 가볍다.
-  // 가는 기둥(가로등 기둥, 나무 줄기)은 넣지 않는다. 지나갈 때마다 카메라가 확 당겨져 오히려 어지럽다.
-  var CAM_BLOCK = [], CAM_BLOCK_X = [], CAM_BLOCK_V = [], CAM_BLOCK_M = [];   // 공통, 크리스마스, 게임마을, 무거마을
-  (function () {
-    function bx(x0, x1, y0, y1, z0, z1, list) { (list || CAM_BLOCK).push([x0, x1, y0, y1, z0, z1]); }
-    W.SHOPS.forEach(function (sh) { bx(sh[0] - 3.2, sh[0] + 3.2, 0, 3.8, W.SHOP_Z - 2.7, W.SHOP_Z + 2.7); });
-    W.TREES.forEach(function (t, i) {
-      var sc = 0.9 + (i % 4) * 0.12, r = 1.45 * sc;
-      bx(t[0] - r, t[0] + r, 1.7, 2 + 3.6 * sc, t[1] - r, t[1] + r);                          // 잎
-    });
-    W.LAMPS.forEach(function (l) {
-      var dir = l[0] < 0 ? 1 : -1;
-      bx(Math.min(l[0], l[0] + dir * 1.2), Math.max(l[0], l[0] + dir * 1.2), 3.2, 3.95, l[1] - 0.4, l[1] + 0.4);   // 등
-    });
-    bx(W.XMAS.tree[0] - 2.1, W.XMAS.tree[0] + 2.1, 0, 7.5, W.XMAS.tree[1] - 2.1, W.XMAS.tree[1] + 2.1, CAM_BLOCK_X);
-    [W.NAMU, W.PLAY].forEach(function (B) { bx(B.x - B.w / 2 - 0.3, B.x + B.w / 2 + 0.3, 0, 7.7, B.z - B.d / 2 - 0.3, B.z + B.d / 2 + 0.3, B === W.NAMU ? CAM_BLOCK_M : CAM_BLOCK_V); });
-    bx(W.BOOTH.x - 1.8, W.BOOTH.x + 1.8, 0, 4.5, W.BOOTH.z - 1.8, W.BOOTH.z + 1.8, CAM_BLOCK_V);              // 마을 엘리베이터
-  })();
-  // 선분 (ax,ay,az) → (bx,by,bz) 가 상자에 처음 닿는 비율(0~1). 안 닿으면 1.
-  function segHit(ax, ay, az, dx, dy, dz, b) {
-    var t0 = 0, t1 = 1, o = [ax, ay, az], d = [dx, dy, dz];
-    for (var k = 0; k < 3; k++) {
-      var lo = b[k * 2], hi = b[k * 2 + 1];
-      if (Math.abs(d[k]) < 1e-6) { if (o[k] < lo || o[k] > hi) return 1; continue; }
-      var u0 = (lo - o[k]) / d[k], u1 = (hi - o[k]) / d[k];
-      if (u0 > u1) { var tt = u0; u0 = u1; u1 = tt; }
-      if (u0 > t0) t0 = u0; if (u1 < t1) t1 = u1;
-      if (t0 > t1) return 1;
-    }
-    return t0;
-  }
-  function camClear(tx, ty, tz, cx, cy, cz) {
-    var dx = cx - tx, dy = cy - ty, dz = cz - tz, best = 1, i;
-    for (i = 0; i < CAM_BLOCK.length; i++) best = Math.min(best, segHit(tx, ty, tz, dx, dy, dz, CAM_BLOCK[i]));
-    if (xmasOn) for (i = 0; i < CAM_BLOCK_X.length; i++) best = Math.min(best, segHit(tx, ty, tz, dx, dy, dz, CAM_BLOCK_X[i]));
-    if (area === 'out') for (i = 0; i < CAM_BLOCK_M.length; i++) best = Math.min(best, segHit(tx, ty, tz, dx, dy, dz, CAM_BLOCK_M[i]));
-    if (area === 'o_gm') for (i = 0; i < CAM_BLOCK_V.length; i++) best = Math.min(best, segHit(tx, ty, tz, dx, dy, dz, CAM_BLOCK_V[i]));
-    return best;                                                   // 0~1: 카메라까지 거리 중 비어 있는 비율
-  }
-  var camPull = 1;                                                  // 지금 쓰는 비율 (부드럽게 바뀐다)
 
   /* ---------- 캐릭터 (오리지널 디자인: 머리가 큰 양 사원 + 정장 + 사원증) ---------- */
   // 몸통(자켓) 타원체의 크기. 셔츠·넥타이·옷깃은 이 표면을 따라 붙인다.
@@ -1949,14 +1907,15 @@ function bonsaBoot() {
   var player = makeCharacter(BODY_COLORS[0], '[인턴] …');
   scene.add(player);
   var P = { x: 0, z: 24, face: Math.PI, walk: 0 };
+  var ZOOM_MIN = 0.5, ZOOM_MAX = 3.6;                  // 시점 거리 배율 (야외 기본 8m × 배율 → 약 4~29m)
   var cam = { yaw: 0, pitch: 0.42, zoom: 1.3, follow: true, manualT: 0 };
   // 시점 따라가기(기본 켜짐): 걸으면 카메라가 천천히 캐릭터 뒤로 돌아간다
   try { cam.follow = localStorage.getItem('bonsa_follow') !== '0'; } catch (err) {}
-  // 시점 거리 배율: 0.7(가까이) ~ 2.2(멀리). 기기에 기억해 둔다.
-  try { var zs = parseFloat(localStorage.getItem('bonsa_zoom')); if (zs >= 0.7 && zs <= 2.2) cam.zoom = zs; } catch (err) {}
+  // 시점 거리 배율은 기기에 기억해 둔다.
+  try { var zs = parseFloat(localStorage.getItem('bonsa_zoom')); if (zs >= ZOOM_MIN && zs <= ZOOM_MAX) cam.zoom = zs; } catch (err) {}
   var zoomSaveT = 0;
   function setZoom(z) {
-    cam.zoom = Math.max(0.7, Math.min(2.2, z));
+    cam.zoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, z));
     clearTimeout(zoomSaveT);
     zoomSaveT = setTimeout(function () { try { localStorage.setItem('bonsa_zoom', cam.zoom.toFixed(2)); } catch (err) {} }, 400);
   }
@@ -4193,19 +4152,8 @@ function bonsaBoot() {
       cz = Math.max(-LD / 2 + 0.4, Math.min(LD / 2 - 0.4, cz));
       var hr = Math.hypot(cx - P.x, cz - P.z) / h0;
       cyy = Math.min(LH - 0.4, 1.3 + Math.max((cyy - 1.3) * hr, Math.sin(pitch) * 5.6));
-    } else {
-      if (area === 'out' && cx > -8.6 && cx < 8.6 && cz > -6.6 && cz < 6.6) {
-        // 카메라가 건물 안으로 파고들지 않게 가장 가까운 벽 밖으로 밀어낸다
-        var px0 = cx + 8.6, px1 = 8.6 - cx, pz0 = cz + 6.6, pz1 = 6.6 - cz;
-        var mn = Math.min(px0, px1, pz0, pz1);
-        if (mn === pz1) cz = 6.6; else if (mn === pz0) cz = -6.6; else if (mn === px1) cx = 8.6; else cx = -8.6;
-      }
-      // 사이에 물체가 끼면 그 바로 앞까지 카메라를 당긴다. 당길 때는 바로, 물러날 때는 천천히.
-      var fullLen = Math.hypot(cx - P.x, cyy - 1.3, cz - P.z) || 1;
-      var want = Math.max(2.2 / fullLen, camClear(P.x, 1.3, P.z, cx, cyy, cz) - 0.35 / fullLen);
-      camPull = want < camPull ? want : camPull + (want - camPull) * Math.min(1, dt * 2.5);
-      cx = P.x + (cx - P.x) * camPull; cyy = 1.3 + (cyy - 1.3) * camPull; cz = P.z + (cz - P.z) * camPull;
     }
+    // 1.9.1 (사용자 요청): 야외에서는 사이에 물체가 끼어도 카메라를 당기지 않는다. 늘 고른 거리의 3인칭.
     var zb = playing && !uiOpen && !inShop ? 'flex' : 'none';
     if (zoomShown !== zb) { zoomShown = zb; $('zoomBox').style.display = zb; }
     camera.position.set(cx, cyy, cz);
